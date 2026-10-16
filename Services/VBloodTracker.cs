@@ -175,14 +175,15 @@ internal static class VBloodTracker
     static void MarkAlive(VBloodStatus status, string source)
     {
         if (status.IsDead)
-        {
-            if (status.DiedAt > 0)
-                RespawnMemory.Record(status.Info, Now - status.DiedAt, exact: false);
             Core.Log.LogInfo($"{status.Info.Name} is up again ({source}).");
-        }
         status.State = HuntState.Alive;
         status.ClearDeath();
     }
+
+    // Respawn times are fixed per boss (ghosts confirm the built-in times to the second), so once a countdown
+    // has run out (plus a short grace) the boss is up. Servers that keep dead bosses on their position list
+    // give no other "it's back" signal unless you're nearby.
+    const double DueGraceSeconds = 5;
 
     static void RefreshDueStates()
     {
@@ -193,6 +194,9 @@ internal static class VBloodTracker
                 status.State = HuntState.Due;
             else if (status.State == HuntState.Due && status.RespawnAt > now)
                 status.State = HuntState.Respawning;
+
+            if (status.State == HuntState.Due && _serverListsDead != false && now - status.RespawnAt >= DueGraceSeconds)
+                MarkAlive(status, "respawn timer ended");
         }
     }
 
@@ -341,13 +345,16 @@ internal static class VBloodTracker
                 var target = buffEntity.Read<Buff>().Target;
                 if (target != Entity.Null) _ghostTargets.Add(EntityKey(target));
 
+                // The same buff also turns up on ordinary mobs (e.g. Stavros' worshippers) with no time: skip those.
+                int targetPrefab = target.Exists() && target.Has<PrefabGUID>() ? target.Read<PrefabGUID>().GuidHash : 0;
+                if (targetPrefab != 0 && !VBloodCatalog.IsKnown(targetPrefab)) continue;
+
                 double remaining = destroyTime - serverNow;
                 bool valid = double.IsFinite(remaining) && remaining > -60 && remaining < 4 * 3600;
                 var status = valid ? MatchGhost(buffEntity, target, out string how) : null;
 
-                if (_loggedGhosts.Add(buffEntity.Index))
+                if (_loggedGhosts.Add(buffEntity.Index) && (status != null || _loggedGhosts.Add(-1 - targetPrefab)))
                 {
-                    string targetPrefab = target.Exists() && target.Has<PrefabGUID>() ? target.Read<PrefabGUID>().GuidHash.ToString() : "none";
                     Core.Log.LogInfo($"V Blood ghost seen: target prefab {targetPrefab}, respawn in {remaining:0}s " +
                                      $"(DestroyTime {destroyTime:0.0}, server time {serverNow:0.0}) -> " +
                                      $"{(status != null ? status.Info.Name : valid ? "unmatched" : "ignored, bad time")}.");
@@ -358,7 +365,7 @@ internal static class VBloodTracker
                 if (status.RespawnExact && Math.Abs(status.RespawnAt - respawnAt) < 2) continue; // already known
 
                 if (status.DiedAt > 0 && status.DiedAtExact)
-                    RespawnMemory.Record(status.Info, respawnAt - status.DiedAt, exact: true);
+                    RespawnMemory.RecordExact(status.Info, respawnAt - status.DiedAt);
 
                 status.RespawnAt = respawnAt;
                 status.RespawnExact = true;
@@ -448,17 +455,13 @@ internal static class VBloodTracker
                 status.HasPosition = true;
                 status.Position = position;
 
+                // Being listed never cancels a running countdown: some servers keep dead bosses on the list,
+                // and respawn times are fixed, so the countdown itself says when the boss is back.
                 switch (status.State)
                 {
                     case HuntState.Unknown:
                     case HuntState.NotDetected:
-                    case HuntState.Due:
-                        MarkAlive(status, "listed by server");
-                        break;
-                    case HuntState.Respawning when _serverListsDead == false
-                                                && (status.DiedAt == 0 || now - status.DiedAt >= MinDeadSecondsBeforeRespawn)
-                                                && !(status.RespawnExact && status.RespawnAt > now):
-                        // The server only lists living bosses, so being listed again means it's back early.
+                    case HuntState.Due when _serverListsDead == false:
                         MarkAlive(status, "listed by server");
                         break;
                 }
@@ -484,6 +487,8 @@ internal static class VBloodTracker
     static void StartCalibration(VBloodStatus status, double now)
     {
         if (_serverListsDead.HasValue || _calibrationGuid != 0) return;
+        // Only a boss the server was listing tells us anything: some (Dracula, Nibbles) are never listed.
+        if (_lastListed == null || !_lastListed.Contains(status.Info.Guid.GuidHash)) return;
         _calibrationGuid = status.Info.Guid.GuidHash;
         _calibrationAfter = now + 2; // give the server a moment to process the death
     }

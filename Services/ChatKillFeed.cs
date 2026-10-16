@@ -29,7 +29,15 @@ internal static class ChatKillFeed
         ["CHAR_Gloomrot_Monster_VBlood"] = new[] { "Adam" },
     };
 
-    sealed record Alias(VBloodInfo Info, string Text, Regex Pattern, Regex PrimalPattern);
+    // Titles that announcements often drop ("for beating Valencia!").
+    static readonly string[] _titles = { "General ", "Sir ", "Lord " };
+
+    // Built in, so new words reach players whose config already exists. ExtraChatKillWords adds to these.
+    const string BuiltInKillWords =
+        "killed,kills,slain,slew,slays,defeated,defeats,vanquished,felled,fallen,destroyed,conquered,died," +
+        "downed,took down,taken down,beat,beats,beaten,beating";
+
+    sealed record Alias(VBloodInfo Info, string Text, bool IsFullName, Regex Pattern, Regex PrimalPattern);
 
     static readonly List<Alias> _aliases = BuildAliases();
     static Regex _killWords;
@@ -38,6 +46,7 @@ internal static class ChatKillFeed
     static string _channelsSource;
 
     static readonly Dictionary<string, double> _recentMessages = new();
+    static readonly HashSet<ServerChatMessageType> _loggedChannels = new();
 
     static List<Alias> BuildAliases()
     {
@@ -47,12 +56,15 @@ internal static class ChatKillFeed
             var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { info.Name };
             int the = info.Name.IndexOf(" the ", StringComparison.OrdinalIgnoreCase);
             if (the > 0) names.Add(info.Name[..the]); // "Alpha", "Sir Magnus", "Henry Blackbrew"
+            foreach (var name in names.ToList()) // "Valencia", "Magnus", "Styx"
+                foreach (var title in _titles)
+                    if (name.StartsWith(title, StringComparison.OrdinalIgnoreCase)) names.Add(name[title.Length..]);
             if (_extraAliases.TryGetValue(info.PrefabName, out var extra)) names.UnionWith(extra);
 
             foreach (var name in names.Where(n => n.Length >= 3))
             {
                 string escaped = Regex.Escape(name.ToLowerInvariant());
-                aliases.Add(new Alias(info, name,
+                aliases.Add(new Alias(info, name, string.Equals(name, info.Name, StringComparison.OrdinalIgnoreCase),
                     new Regex($@"\b{escaped}\b", RegexOptions.Compiled),
                     new Regex($@"\bprimal\s+{escaped}\b", RegexOptions.Compiled)));
             }
@@ -64,7 +76,6 @@ internal static class ChatKillFeed
     public static void OnServerMessage(ServerChatMessageType type, string message, long timeUtc)
     {
         if (!Settings.ReadChatKills || string.IsNullOrWhiteSpace(message)) return;
-        if (!Channels().Contains(type)) return;
 
         string text = _whitespace.Replace(_richText.Replace(message, " "), " ").Trim();
         string lower = text.ToLowerInvariant();
@@ -75,29 +86,43 @@ internal static class ChatKillFeed
         _recentMessages[lower] = now;
         if (_recentMessages.Count > 200) PruneRecent(now);
 
+        // Full boss names first: a message with exactly one full V Blood name is about that boss, even if a
+        // player's name happens to be a short alias ("Ben", "Adam"). Short names/nicknames are a fallback.
         VBloodInfo match = null;
         string remainder = lower;
-        foreach (var alias in _aliases)
+        foreach (bool fullNames in new[] { true, false })
         {
-            if (!alias.Pattern.IsMatch(remainder)) continue;
-            if (alias.PrimalPattern.IsMatch(remainder)) // "Primal Rufus" (Bloodcraft) isn't the V Blood itself
+            foreach (var alias in _aliases)
             {
-                remainder = alias.PrimalPattern.Replace(remainder, " ");
-                continue;
+                if (alias.IsFullName != fullNames || !alias.Pattern.IsMatch(remainder)) continue;
+                if (alias.PrimalPattern.IsMatch(remainder)) // "Primal Rufus" (Bloodcraft) isn't the V Blood itself
+                {
+                    remainder = alias.PrimalPattern.Replace(remainder, " ");
+                    continue;
+                }
+                if (match != null && match != alias.Info)
+                {
+                    Core.Diag($"Chat names more than one V Blood, ignored: \"{text}\"");
+                    return;
+                }
+                match = alias.Info;
+                remainder = alias.Pattern.Replace(remainder, " "); // so "Undead General" can't supply "dead"
             }
-            if (match != null && match != alias.Info)
-            {
-                Core.Diag($"Chat names more than one V Blood, ignored: \"{text}\"");
-                return;
-            }
-            match = alias.Info;
-            remainder = alias.Pattern.Replace(remainder, " "); // so "Undead General" can't supply "dead"
+            if (match != null) break;
         }
         if (match == null) return;
 
         if (!KillWords().IsMatch(remainder))
         {
             Core.Diag($"Chat mentions {match.Name} but no kill word, ignored: \"{text}\"");
+            return;
+        }
+
+        if (!Channels().Contains(type))
+        {
+            if (_loggedChannels.Add(type))
+                Core.Log.LogInfo($"Kill announcement on the {type} channel ignored (not in ChatKillChannels): \"{text}\". " +
+                                 $"Add {type} to ChatKillChannels if this is how your server announces kills.");
             return;
         }
 
@@ -128,8 +153,10 @@ internal static class ChatKillFeed
     {
         string source = Settings.ChatKillWords;
         if (_killWords != null && source == _killWordsSource) return _killWords;
-        var words = source.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Select(w => Regex.Escape(w.ToLowerInvariant()));
+        var words = (BuiltInKillWords + "," + source)
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(w => Regex.Escape(w.ToLowerInvariant()))
+            .Distinct();
         _killWords = new Regex($@"\b({string.Join("|", words)})\b", RegexOptions.Compiled);
         _killWordsSource = source;
         return _killWords;

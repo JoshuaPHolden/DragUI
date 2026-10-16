@@ -22,34 +22,50 @@ internal static class UIManager
     static Canvas _canvas;
     static CanvasScaler _scaler;
     static RectTransform _canvasRect;
+    static ControlBar _bar;
     static HuntTrackerHud _hud;
     static VBloodListPanel _list;
+    static FamiliarPanel _familiars;
+    static readonly List<Window> _windows = new();
     static float _appliedScale;
     static double _inGameSince;
     static double _nextRefreshAt;
     static bool _huntsChanged;
+    static bool _familiarsChanged;
 
-    enum DragTarget { None, Hud, Panel }
-    static DragTarget _drag;
+    // Something the player can move: dragged by Handle (except over Exclude), position saved on release.
+    sealed class Draggable
+    {
+        public RectTransform Root;
+        public RectTransform Handle;
+        public RectTransform Exclude;
+        public bool Centred;        // anchored to the screen centre (windows) vs the top-left (HUD, bar)
+        public Action<Vector2> Save;
+    }
+
+    static readonly List<Draggable> _draggables = new();
+    static Draggable _drag;
     static Vector2 _dragStartMouse;
     static Vector2 _dragStartPosition;
-    static bool _dragMoved;
+    static bool _dragMoved;      // this drag passed the threshold (saved on release)
+    static bool _suppressClick;  // the click that ends a drag shouldn't also press the button
 
     /// <summary>True while the cursor is over one of our visible panels (read by ClickGuard).</summary>
     public static bool PointerOverUI { get; private set; }
 
-    public static void ToggleList()
-    {
-        if (_list == null) return;
-        _list.SetVisible(!_list.Visible);
-    }
+    /// <summary>True while one of our text boxes has keyboard focus (read by TypingLock).</summary>
+    public static bool TypingInUI { get; private set; }
+
+    public static void ToggleList() => _list?.Toggle();
 
     /// <summary>True if the click that's finishing was really the end of a drag (so ignore it).</summary>
     public static bool ConsumeDragClick()
     {
-        bool moved = _dragMoved;
-        _dragMoved = false;
-        return moved;
+        // The button's click fires before our drag-end handling, so this uses its own flag: clearing
+        // _dragMoved here used to skip saving the new position.
+        bool suppress = _suppressClick;
+        _suppressClick = false;
+        return suppress;
     }
 
     public static void Tick()
@@ -58,7 +74,8 @@ internal static class UIManager
         {
             _inGameSince = 0;
             PointerOverUI = false;
-            _drag = DragTarget.None;
+            TypingInUI = false;
+            _drag = null;
             if (_root != null && _root.activeSelf) _root.SetActive(false);
             return;
         }
@@ -74,7 +91,9 @@ internal static class UIManager
         if (!_root.activeSelf) _root.SetActive(true);
 
         ApplyScale();
-        HandleHotkey();
+        TypingInUI = IsTypingInOurField() || (_familiars?.Capturing ?? false);
+        HandleHotkeys();
+        _familiars?.Update();
         HandlePointer();
 
         if (_huntsChanged)
@@ -83,13 +102,19 @@ internal static class UIManager
             _hud.Rebuild();
             _list.LayoutRows();
         }
+        if (_familiarsChanged)
+        {
+            _familiarsChanged = false;
+            _familiars?.Rebuild();
+        }
 
         if (now >= _nextRefreshAt)
         {
             _nextRefreshAt = now + RefreshInterval;
             _hud.Refresh();
-            _list.Refresh();
+            foreach (var window in _windows) window.Refresh();
         }
+        _bar.Refresh(); // cheap (restyles only on change) and keeps the buttons in step with every close
     }
 
     static void Build()
@@ -115,23 +140,60 @@ internal static class UIManager
 
         _hud = new HuntTrackerHud(_root.transform);
         _list = new VBloodListPanel(_root.transform);
+        _windows.Add(_list);
+        if (Settings.FamiliarsEnabled)
+        {
+            _familiars = new FamiliarPanel(_root.transform);
+            _windows.Add(_familiars);
+        }
+
+        // One button per feature. Add new features here.
+        var entries = new List<ControlBar.Entry>
+        {
+            new() { Label = "Tracker", IsOpen = () => _hud.Visible, Toggle = () => _hud.SetVisible(!_hud.Visible) },
+            new() { Label = "V Bloods", IsOpen = () => _list.Visible, Toggle = _list.Toggle },
+        };
+        if (_familiars != null)
+            entries.Add(new() { Label = "Familiars", IsOpen = () => _familiars.Visible, Toggle = _familiars.Toggle });
+        _bar = new ControlBar(_root.transform, entries);
+
+        _draggables.Add(new Draggable { Root = _bar.Root, Handle = _bar.Grip, Save = p => Settings.BarPosition = p });
+        _draggables.Add(new Draggable { Root = _hud.Root, Handle = _hud.Header, Save = p => Settings.HudPosition = p });
+        foreach (var window in _windows)
+        {
+            var w = window;
+            _draggables.Add(new Draggable
+            {
+                Root = w.Root, Handle = w.TitleBar, Exclude = w.CloseButton, Centred = true,
+                Save = p => w.SavedPosition = p,
+            });
+        }
 
         HuntStore.Changed += OnHuntsChanged;
+        FamiliarStore.Changed += OnFamiliarsChanged;
         Core.Log.LogInfo("UI built.");
     }
 
     public static void Destroy()
     {
         HuntStore.Changed -= OnHuntsChanged;
+        FamiliarStore.Changed -= OnFamiliarsChanged;
         if (_root != null) Object.Destroy(_root);
         _root = null;
+        _bar = null;
         _hud = null;
         _list = null;
+        _familiars = null;
+        _windows.Clear();
+        _draggables.Clear();
+        _drag = null;
         PointerOverUI = false;
+        TypingInUI = false;
     }
 
     // Deferred to the next tick so a click handler never rebuilds the row it's running from.
     static void OnHuntsChanged() => _huntsChanged = true;
+    static void OnFamiliarsChanged() => _familiarsChanged = true;
 
     static void ApplyScale()
     {
@@ -141,77 +203,94 @@ internal static class UIManager
         _scaler.referenceResolution = ReferenceResolution / scale;
     }
 
-    static void HandleHotkey()
+    static void HandleHotkeys()
     {
+        if (IsTypingInGameField() || (_familiars?.Capturing ?? false)) return;
+
         var key = Settings.ToggleKey;
-        if (key == KeyCode.None || !Input.GetKeyDown(key) || IsTypingInGameField()) return;
-        ToggleList();
+        if (key != KeyCode.None && Input.GetKeyDown(key)) ToggleList();
+
+        if (_familiars != null && FamiliarStore.TryGetPressed(out string familiar))
+            FamiliarService.Summon(familiar, remember: false);
     }
 
-    static bool IsTypingInGameField()
+    static TMP_InputField FocusedField()
     {
         var selected = EventSystem.current != null ? EventSystem.current.currentSelectedGameObject : null;
-        if (selected == null) return false;
+        if (selected == null) return null;
         var field = selected.GetComponent<TMP_InputField>();
-        return field != null && field.isFocused;
+        return field != null && field.isFocused ? field : null;
+    }
+
+    static bool IsTypingInGameField() => FocusedField() != null;
+
+    static bool IsTypingInOurField()
+    {
+        var field = FocusedField();
+        return field != null && field.transform.IsChildOf(_root.transform);
     }
 
     static void HandlePointer()
     {
         Vector2 mouse = Input.mousePosition;
-        PointerOverUI = Contains(_hud.Root, mouse) || (_list.Visible && Contains(_list.Root, mouse));
+        PointerOverUI = false;
+        foreach (var d in _draggables)
+        {
+            if (!Contains(d.Root, mouse)) continue;
+            PointerOverUI = true;
+            break;
+        }
 
         if (Input.GetMouseButtonDown(0))
         {
             _dragMoved = false;
+            _suppressClick = false;
             if (PointerOverUI) ClickGuard.ArmPhantomGuard();
 
-            if (Contains(_hud.Header, mouse))
-                BeginDrag(DragTarget.Hud, mouse, _hud.Root.anchoredPosition);
-            else if (_list.Visible && Contains(_list.TitleBar, mouse) && !Contains(_list.CloseButton, mouse))
-                BeginDrag(DragTarget.Panel, mouse, _list.Root.anchoredPosition);
+            // Topmost first: later siblings draw over earlier ones.
+            Draggable hit = null;
+            foreach (var d in _draggables)
+            {
+                if (!Contains(d.Handle, mouse) || Contains(d.Exclude, mouse)) continue;
+                if (hit == null || d.Root.GetSiblingIndex() > hit.Root.GetSiblingIndex()) hit = d;
+            }
+            if (hit != null)
+            {
+                _drag = hit;
+                _dragStartMouse = mouse;
+                _dragStartPosition = hit.Root.anchoredPosition;
+            }
         }
 
-        if (_drag == DragTarget.None) return;
+        if (_drag == null) return;
 
         if (!Input.GetMouseButton(0))
         {
-            if (_dragMoved)
-            {
-                if (_drag == DragTarget.Hud) Settings.HudPosition = _hud.Root.anchoredPosition;
-                else Settings.PanelPosition = _list.Root.anchoredPosition;
-            }
-            _drag = DragTarget.None;
+            if (_dragMoved) _drag.Save(_drag.Root.anchoredPosition);
+            _drag = null;
             return;
         }
 
         Vector2 delta = (mouse - _dragStartMouse) / Mathf.Max(0.01f, _canvas.scaleFactor);
         if (!_dragMoved && delta.magnitude * _canvas.scaleFactor < DragThreshold) return;
         _dragMoved = true;
+        _suppressClick = true;
 
         Vector2 size = _canvasRect.rect.size;
         Vector2 position = _dragStartPosition + delta;
-        if (_drag == DragTarget.Hud)
-        {
-            Vector2 hudSize = _hud.Root.sizeDelta;
-            position.x = Mathf.Clamp(position.x, 0f, Mathf.Max(0f, size.x - hudSize.x));
-            position.y = Mathf.Clamp(position.y, -(size.y - 28f), 0f);
-            _hud.SetPosition(position);
-        }
-        else
+        if (_drag.Centred)
         {
             Vector2 half = size * 0.5f;
             position.x = Mathf.Clamp(position.x, -half.x, half.x);
             position.y = Mathf.Clamp(position.y, -half.y, half.y);
-            _list.SetPosition(position);
         }
-    }
-
-    static void BeginDrag(DragTarget target, Vector2 mouse, Vector2 startPosition)
-    {
-        _drag = target;
-        _dragStartMouse = mouse;
-        _dragStartPosition = startPosition;
+        else
+        {
+            Vector2 rootSize = _drag.Root.sizeDelta;
+            position.x = Mathf.Clamp(position.x, 0f, Mathf.Max(0f, size.x - rootSize.x));
+            position.y = Mathf.Clamp(position.y, -(size.y - 28f), 0f);
+        }
+        _drag.Root.anchoredPosition = position;
     }
 
     static bool Contains(RectTransform rect, Vector2 screenPoint) =>

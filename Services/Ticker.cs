@@ -63,5 +63,14 @@ internal static class Ticker
         {
             Core.Log.LogError($"UI tick failed: {ex}");
         }
+
+        try
+        {
+            Patches.TypingLock.Tick(); // also runs out of game, so a lock can never outlive the UI
+        }
+        catch (Exception ex)
+        {
+            Core.Log.LogError($"Typing lock tick failed: {ex}");
+        }
     }
 }

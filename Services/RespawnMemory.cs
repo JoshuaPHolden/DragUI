@@ -4,10 +4,15 @@ using VBloodHunter.Data;
 
 namespace VBloodHunter.Services;
 
-// Respawn durations measured in-game, used to sharpen future estimates. Each line in
-// BepInEx/config/VBloodHunter/respawn-times.txt is "<PrefabGUID>=<seconds>".
+// Respawn durations measured exactly in-game (ghost respawn time minus the game's own time of death),
+// used ahead of the catalog defaults. Each line in BepInEx/config/VBloodHunter/respawn-times.txt is
+// "<PrefabGUID>=<seconds>" after a version header.
+//
+// Only exact measurements are stored. Earlier versions also learned from poll observations, which drifted
+// badly on servers that keep dead V Bloods on their position list; files without the header are discarded.
 internal static class RespawnMemory
 {
+    const string Header = "# VBloodHunter respawn times v2 (exact measurements only)";
     static readonly string _path = Path.Combine(Paths.ConfigPath, "VBloodHunter", "respawn-times.txt");
     static readonly Dictionary<int, double> _learned = new();
 
@@ -30,22 +35,18 @@ internal static class RespawnMemory
         return Settings.FallbackRespawnSeconds;
     }
 
-    /// <summary>Record a measured respawn duration. Exact measurements (from a ghost) replace the
-    /// stored value; poll-based measurements are blended in, since they're only accurate to a poll.</summary>
-    public static void Record(VBloodInfo info, double seconds, bool exact)
+    /// <summary>Record an exactly measured respawn duration.</summary>
+    public static void RecordExact(VBloodInfo info, double seconds)
     {
         if (!Settings.LearnRespawnTimes) return;
         if (seconds < 30 || seconds > 4 * 3600) return; // implausible; ignore
 
         int key = info.Guid.GuidHash;
-        double value = !exact && _learned.TryGetValue(key, out double previous)
-            ? (previous + seconds) / 2
-            : seconds;
-        value = Math.Round(value);
-
-        if (_learned.TryGetValue(key, out double existing) && Math.Abs(existing - value) < 1) return;
+        double value = Math.Round(seconds);
+        if (_learned.TryGetValue(key, out double existing) && Math.Abs(existing - value) < 2) return;
         _learned[key] = value;
-        Core.Diag($"Learned respawn for {info.Name}: {value:0}s ({(exact ? "exact" : "observed")}).");
+        Core.Log.LogInfo($"Measured respawn time for {info.Name}: {value:0}s" +
+                         (info.DefaultRespawnSeconds > 0 ? $" (default {info.DefaultRespawnSeconds}s)." : "."));
         Save();
     }
 
@@ -55,7 +56,14 @@ internal static class RespawnMemory
         try
         {
             if (!File.Exists(_path)) return;
-            foreach (var line in File.ReadAllLines(_path))
+            var lines = File.ReadAllLines(_path);
+            if (lines.Length == 0 || lines[0] != Header)
+            {
+                File.Delete(_path);
+                Core.Log.LogInfo("Discarded respawn times learned by an older version (they could drift); using the built-in times.");
+                return;
+            }
+            foreach (var line in lines.Skip(1))
             {
                 var parts = line.Split('=');
                 if (parts.Length == 2
@@ -78,7 +86,9 @@ internal static class RespawnMemory
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(_path));
-            File.WriteAllLines(_path, _learned.Select(kv => $"{kv.Key}={kv.Value.ToString("0", CultureInfo.InvariantCulture)}"));
+            File.WriteAllLines(_path, _learned
+                .Select(kv => $"{kv.Key}={kv.Value.ToString("0", CultureInfo.InvariantCulture)}")
+                .Prepend(Header));
         }
         catch (Exception ex)
         {

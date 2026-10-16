@@ -35,6 +35,13 @@ internal static class ClickGuard
     {
         try
         {
+            // Backstop for the typing lock: no casts at all while typing in one of our text boxes.
+            if (TypingLock.Active && Core.InGame)
+            {
+                CancelCast(onlyPrimary: false);
+                return false;
+            }
+
             if (!Settings.BlockClicksOverUI || !Core.InGame) return true;
 
             // Only while a mouse button is involved: keyboard casts with the cursor resting over the

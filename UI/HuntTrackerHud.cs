@@ -10,15 +10,19 @@ namespace VBloodHunter.UI;
 // its live status and a Track button.
 internal sealed class HuntTrackerHud
 {
-    const float Width = 330f;
+    const float Width = 400f;
+    const float Pad = 6f;
     const float HeaderHeight = 28f;
-    const float RowHeight = 24f;
-    const float Pad = 4f;
+    const float RowHeight = 26f;
+    const float Radius = 10f;
+    const float TrackWidth = 60f;
 
     sealed class Row
     {
         public VBloodInfo Info;
         public RectTransform Rect;
+        public UnityEngine.UI.Image Dot;
+        public UnityEngine.UI.Image Divider;
         public TextMeshProUGUI Name;
         public TextMeshProUGUI Status;
         public UIFactory.ButtonRef Track;
@@ -32,31 +36,41 @@ internal sealed class HuntTrackerHud
 
     public RectTransform Root { get; }
     public RectTransform Header => _headerButton.Rect;
+    public bool Visible => Root.gameObject.activeSelf;
 
     public HuntTrackerHud(Transform parent)
     {
-        var background = UIFactory.CreatePanel("HuntTracker", parent, Theme.HudBg);
-        Root = background.rectTransform;
+        Root = UIFactory.CreateCard("HuntTracker", parent, Theme.HudBg, Radius).Root;
 
-        _headerButton = UIFactory.CreateButton("ListButton", Root, "V Blood Hunt", 15, OnHeaderClicked);
-        _headerButton.Rect.Place(0, 0, Width - HeaderHeight, HeaderHeight);
+        _headerButton = UIFactory.CreateButton("ListButton", Root, "V Blood Hunt", 15, OnHeaderClicked, radius: 7f);
+        _headerButton.Rect.Place(Pad, Pad, Width - Pad * 3 - HeaderHeight, HeaderHeight);
         _headerButton.SetColors(Theme.Accent, Theme.AccentHover);
         _headerButton.Label.fontStyle = FontStyles.Bold;
+        _headerButton.Label.characterSpacing = 1.5f;
 
         _collapseButton = UIFactory.CreateButton("Collapse", Root, "-", 16, () =>
         {
             Settings.HudCollapsed = !Settings.HudCollapsed;
             Layout();
-        });
-        _collapseButton.Rect.Place(Width - HeaderHeight, 0, HeaderHeight, HeaderHeight);
+        }, radius: 7f);
+        _collapseButton.Rect.Place(Width - Pad - HeaderHeight, Pad, HeaderHeight, HeaderHeight);
         _collapseButton.SetColors(Theme.TitleBg, Theme.AccentHover);
 
         _body = UIFactory.CreateRect("Rows", Root);
         _emptyText = UIFactory.CreateText("Empty", _body, "No V Bloods selected. Click the header to pick some.",
             12, Theme.TextDim);
-        _emptyText.rectTransform.Place(8, 0, Width - 16, RowHeight);
+        _emptyText.rectTransform.Place(12, 0, Width - 24, RowHeight);
 
         Rebuild();
+        Root.anchoredPosition = Settings.HudPosition; // only here: rebuilds keep wherever it was dragged
+        Root.gameObject.SetActive(Settings.HudVisible);
+    }
+
+    public void SetVisible(bool visible)
+    {
+        Settings.HudVisible = visible;
+        Root.gameObject.SetActive(visible);
+        if (visible) Refresh();
     }
 
     void OnHeaderClicked()
@@ -80,14 +94,19 @@ internal sealed class HuntTrackerHud
         var rect = UIFactory.CreateRect(info.PrefabName, _body);
         var row = new Row { Info = info, Rect = rect };
 
+        row.Divider = UIFactory.CreateDivider(rect, 10, 0, Width - 20);
+        row.Dot = UIFactory.CreateDot(rect, 12, (RowHeight - 8) / 2, 8, Theme.Unknown);
+
         row.Name = UIFactory.CreateText("Name", rect, info.Name, 13, Theme.Text);
-        row.Name.rectTransform.Place(8, 0, 160, RowHeight);
+        row.Name.rectTransform.Place(26, 0, 146, RowHeight);
 
+        float statusX = 176;
+        float statusWidth = Width - Pad - TrackWidth - 8 - statusX;
         row.Status = UIFactory.CreateText("Status", rect, "...", 13, Theme.Unknown, TextAlignmentOptions.MidlineRight);
-        row.Status.rectTransform.Place(170, 0, 92, RowHeight);
+        row.Status.rectTransform.Place(statusX, 0, statusWidth, RowHeight);
 
-        row.Track = UIFactory.CreateButton("Track", rect, "Track", 12, () => VBloodTracker.ToggleTrack(info));
-        row.Track.Rect.Place(Width - 62, 2, 56, RowHeight - 4);
+        row.Track = UIFactory.CreateButton("Track", rect, "Track", 12, () => VBloodTracker.ToggleTrack(info), radius: 10f);
+        row.Track.Rect.Place(Width - Pad - TrackWidth, 3, TrackWidth, RowHeight - 6);
         return row;
     }
 
@@ -100,22 +119,24 @@ internal sealed class HuntTrackerHud
         int count = Math.Max(1, _rows.Count);
         _emptyText.gameObject.SetActive(_rows.Count == 0);
         for (int i = 0; i < _rows.Count; i++)
+        {
             _rows[i].Rect.Place(0, i * RowHeight, Width, RowHeight);
+            _rows[i].Divider.gameObject.SetActive(i > 0);
+        }
 
+        float bodyTop = Pad + HeaderHeight + Pad;
         float bodyHeight = count * RowHeight;
-        _body.Place(0, HeaderHeight + Pad, Width, bodyHeight);
-        float height = collapsed ? HeaderHeight : HeaderHeight + Pad + bodyHeight + Pad;
+        _body.Place(0, bodyTop, Width, bodyHeight);
+        float height = collapsed ? Pad + HeaderHeight + Pad : bodyTop + bodyHeight + Pad;
 
         Root.anchorMin = Root.anchorMax = new Vector2(0f, 1f);
         Root.pivot = new Vector2(0f, 1f);
         Root.sizeDelta = new Vector2(Width, height);
-        Root.anchoredPosition = Settings.HudPosition;
     }
-
-    public void SetPosition(Vector2 position) => Root.anchoredPosition = position;
 
     public void Refresh()
     {
+        if (!Visible) return;
         _headerButton.Label.text = HuntStore.Count > 0 ? $"V Blood Hunt ({HuntStore.Count})" : "V Blood Hunt";
         if (Settings.HudCollapsed) return;
 
@@ -127,6 +148,7 @@ internal sealed class HuntTrackerHud
                 var (text, color) = StatusFormat.Describe(status, compact: true);
                 row.Status.text = text;
                 row.Status.color = color;
+                row.Dot.color = color;
                 row.Name.color = VBloodTracker.IsTracked(row.Info) ? Theme.AccentHover : Theme.Text;
                 TrackButtonStyle.Apply(row.Track, row.Info);
             }

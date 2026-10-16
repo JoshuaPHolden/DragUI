@@ -7,39 +7,48 @@ namespace VBloodHunter.UI;
 internal static class StatusFormat
 {
     static readonly string[] _directions = { "N", "NE", "E", "SE", "S", "SW", "W", "NW" };
+    const string LocationColor = "#A09A9A"; // dimmed, so the timer stands out
 
-    /// <summary>Status text and colour. "~" marks an estimated (not exact) respawn time.</summary>
+    /// <summary>Status text (TMP rich text) and colour. "~" marks an estimated (not exact) respawn time.
+    /// Distance and direction are shown whenever a position is known, dead or alive.</summary>
     public static (string Text, Color Color) Describe(VBloodStatus status, bool compact)
     {
         double now = VBloodTracker.Now;
+        string where = Where(status);
+
         switch (status.State)
         {
             case HuntState.Alive:
-                string where = Where(status);
-                return (compact ? (where.Length > 0 ? where : "Alive") : (where.Length > 0 ? $"Alive · {where}" : "Alive"), Theme.Alive);
+                if (where.Length == 0) return ("Alive", Theme.Alive);
+                return (compact ? where : $"Alive · {where}", Theme.Alive);
 
             case HuntState.Respawning:
             {
-                string time = Clock(status.RespawnAt - now);
                 string prefix = status.RespawnExact ? "" : "~";
-                return (compact ? $"{prefix}{time}" : $"Respawns in {prefix}{time}", Theme.Respawning);
+                string time = prefix + Clock(status.RespawnAt - now);
+                return (WithLocation(compact ? time : $"Respawn {time}", where), Theme.Respawning);
             }
 
             case HuntState.Due:
             {
                 double overdue = now - status.RespawnAt;
-                if (status.RespawnExact || overdue < 15)
-                    return (compact ? "Due" : "Respawning now", Theme.Due);
-                return (compact ? $"Due +{Clock(overdue)}" : $"Due (estimate passed {Clock(overdue)} ago)", Theme.Due);
+                string due = status.RespawnExact || overdue < 15
+                    ? (compact ? "Due" : "Respawning now")
+                    : (compact ? $"Due +{Clock(overdue)}" : $"Due, {Clock(overdue)} over");
+                return (WithLocation(due, where), Theme.Due);
             }
 
             case HuntState.NotDetected:
-                return (compact ? "Not up" : "Not up · timer unknown", Theme.Unknown);
+                // The server left it out of its answer: dead (and we didn't see it die), or not trackable yet.
+                return (WithLocation(compact ? "Not listed" : "Not listed (dead, or not trackable yet)", where), Theme.Unknown);
 
             default:
                 return (VBloodTracker.HasPositionData ? "-" : "...", Theme.Unknown);
         }
     }
+
+    static string WithLocation(string text, string where) =>
+        where.Length == 0 ? text : $"{text} <color={LocationColor}>· {where}</color>";
 
     static string Where(VBloodStatus status)
     {

@@ -6,17 +6,17 @@ using VBloodHunter.Services;
 namespace VBloodHunter.UI;
 
 // The full list: every V Blood with a hunt checkbox, where it lives, its live status and a Track button.
-internal sealed class VBloodListPanel
+internal sealed class VBloodListPanel : Window
 {
-    const float Width = 700f;
-    const float Height = 580f;
-    const float TitleHeight = 36f;
+    const float PanelWidth = 700f;
     const float RowHeight = 30f;
-    const float ListTop = TitleHeight + 64f;
-    const float FooterHeight = 26f;
+    const float ToolbarY = ContentTop;
+    const float HeaderY = ToolbarY + 36f;
+    const float ListTop = HeaderY + 26f;
+    const float FooterHeight = 28f;
 
     // Column x positions inside a row.
-    const float ColCheck = 10f, ColName = 40f, ColRegion = 290f, ColStatus = 420f, ColTrack = Width - 96f;
+    const float ColCheck = 10f, ColName = 40f, ColRegion = 290f, ColStatus = 400f, ColTrack = PanelWidth - 110f;
 
     sealed class Row
     {
@@ -35,63 +35,43 @@ internal sealed class VBloodListPanel
     readonly TextMeshProUGUI _summary;
     bool _showHuntedOnly;
 
-    public RectTransform Root { get; }
-    public RectTransform TitleBar { get; }
-    public RectTransform CloseButton { get; }
-    public bool Visible => Root.gameObject.activeSelf;
+    public override Vector2 SavedPosition
+    {
+        get => Settings.PanelPosition;
+        set => Settings.PanelPosition = value;
+    }
 
     public VBloodListPanel(Transform parent)
+        : base("VBloodList", parent, "V Blood Hunt", "tick the V Bloods you want on your tracker", PanelWidth, 580f)
     {
-        var background = UIFactory.CreatePanel("VBloodList", parent, Theme.PanelBg);
-        Root = background.rectTransform;
-        Root.anchorMin = Root.anchorMax = new Vector2(0.5f, 0.5f);
-        Root.pivot = new Vector2(0.5f, 0.5f);
-        Root.sizeDelta = new Vector2(Width, Height);
-        Root.anchoredPosition = Settings.PanelPosition;
-
-        // Title bar (drag handle) + close.
-        var title = UIFactory.CreatePanel("TitleBar", Root, Theme.TitleBg);
-        TitleBar = title.rectTransform.Place(0, 0, Width, TitleHeight);
-        var titleText = UIFactory.CreateText("Title", TitleBar, "V Blood Hunt", 18, Theme.Text);
-        titleText.fontStyle = FontStyles.Bold;
-        titleText.rectTransform.Place(12, 0, 200, TitleHeight);
-        var hint = UIFactory.CreateText("Hint", TitleBar, "tick the V Bloods you want on your tracker", 13, Theme.TextDim);
-        hint.rectTransform.Place(150, 0, 380, TitleHeight);
-        var close = UIFactory.CreateButton("Close", TitleBar, "X", 15, () => SetVisible(false));
-        close.Rect.Place(Width - 38, 5, 30, TitleHeight - 10);
-        close.SetColors(Theme.TitleBg, Theme.AccentHover);
-        CloseButton = close.Rect;
-
         // Toolbar.
-        float toolbarY = TitleHeight + 8;
-        _filterAll = UIFactory.CreateButton("ShowAll", Root, "All", 13, () => SetFilter(false));
-        _filterAll.Rect.Place(10, toolbarY, 70, 24);
-        _filterHunted = UIFactory.CreateButton("ShowHunted", Root, "Hunting", 13, () => SetFilter(true));
-        _filterHunted.Rect.Place(84, toolbarY, 80, 24);
-        var clear = UIFactory.CreateButton("Clear", Root, "Clear hunts", 13, HuntStore.Clear);
-        clear.Rect.Place(Width - 106, toolbarY, 96, 24);
+        _filterAll = UIFactory.CreateButton("ShowAll", Root, "All", 13, () => SetFilter(false), radius: 13f);
+        _filterAll.Rect.Place(12, ToolbarY, 70, 26);
+        _filterHunted = UIFactory.CreateButton("ShowHunted", Root, "Hunting", 13, () => SetFilter(true), radius: 13f);
+        _filterHunted.Rect.Place(88, ToolbarY, 86, 26);
+        var clear = UIFactory.CreateButton("Clear", Root, "Clear hunts", 13, HuntStore.Clear, radius: 13f);
+        clear.Rect.Place(Width - 118, ToolbarY, 106, 26);
         _summary = UIFactory.CreateText("Summary", Root, string.Empty, 13, Theme.TextDim);
-        _summary.rectTransform.Place(176, toolbarY, Width - 300, 24);
+        _summary.rectTransform.Place(186, ToolbarY, Width - 316, 26);
 
         // Column headers.
-        float headerY = TitleHeight + 40;
-        Header("Hunt", ColCheck - 2, 40, headerY);
-        Header("V Blood", ColName, 200, headerY);
-        Header("Region", ColRegion, 120, headerY);
-        Header("Status", ColStatus, 160, headerY);
+        Header("Hunt", ColCheck, 40, HeaderY);
+        Header("V Blood", ColName + 4, 200, HeaderY);
+        Header("Region", ColRegion + 4, 120, HeaderY);
+        Header("Status", ColStatus + 4, 160, HeaderY);
+        UIFactory.CreateDivider(Root, 12, HeaderY + 22, Width - 24);
 
         // List.
         _scroll = UIFactory.CreateScrollView("List", Root);
-        _scroll.Scroll.GetComponent<RectTransform>().Fill(0, ListTop, 6, FooterHeight);
+        _scroll.Scroll.GetComponent<RectTransform>().Fill(Inset, ListTop, 8, FooterHeight);
         foreach (var info in VBloodCatalog.All) _rows.Add(CreateRow(info));
 
         var footer = UIFactory.CreateText("Footer", Root,
             "~ = estimated respawn. Exact timers appear once you're near a dead V Blood's ghost. Statuses come from the same request as the game's V Blood menu.",
             11, Theme.TextDim);
-        footer.rectTransform.Place(10, Height - FooterHeight, Width - 20, FooterHeight);
+        footer.rectTransform.Place(14, Height - FooterHeight, Width - 28, FooterHeight - 4);
 
         SetFilter(false);
-        Root.gameObject.SetActive(false);
     }
 
     void Header(string text, float x, float width, float y)
@@ -104,7 +84,8 @@ internal sealed class VBloodListPanel
     Row CreateRow(VBloodInfo info)
     {
         // The row itself is a button: clicking anywhere on it toggles the hunt checkbox.
-        var rowButton = UIFactory.CreateButton(info.PrefabName, _scroll.Content, string.Empty, 12, () => HuntStore.Toggle(info));
+        var rowButton = UIFactory.CreateButton(info.PrefabName, _scroll.Content, string.Empty, 12, () => HuntStore.Toggle(info),
+            radius: 6f, outline: false);
         var rect = rowButton.Rect;
         var row = new Row { Info = info, Rect = rect, Background = rowButton.Background };
 
@@ -120,8 +101,8 @@ internal sealed class VBloodListPanel
         row.Status = UIFactory.CreateText("Status", rect, "...", 13, Theme.Unknown);
         row.Status.rectTransform.Place(ColStatus, 0, ColTrack - ColStatus - 8, RowHeight);
 
-        row.Track = UIFactory.CreateButton("Track", rect, "Track", 12, () => VBloodTracker.ToggleTrack(info));
-        row.Track.Rect.Place(ColTrack, 4, 74, RowHeight - 8);
+        row.Track = UIFactory.CreateButton("Track", rect, "Track", 12, () => VBloodTracker.ToggleTrack(info), radius: 11f);
+        row.Track.Rect.Place(ColTrack, 4, 76, RowHeight - 8);
         return row;
     }
 
@@ -145,7 +126,7 @@ internal sealed class VBloodListPanel
             row.Check.Set(hunted);
             if (!show) continue;
 
-            row.Rect.Place(0, visible * RowHeight, Width - 18, RowHeight);
+            row.Rect.Place(2, visible * RowHeight + 1, Width - 30, RowHeight - 2);
             var normal = hunted ? Theme.RowHunted : visible % 2 == 1 ? Theme.RowAlt : new Color(0, 0, 0, 0);
             var hover = new Color(normal.r, normal.g, normal.b, normal.a + 0.08f);
             var colors = row.Background.GetComponent<UnityEngine.UI.Button>().colors;
@@ -160,20 +141,7 @@ internal sealed class VBloodListPanel
         Refresh();
     }
 
-    public void SetVisible(bool visible)
-    {
-        if (visible == Visible) return;
-        Root.gameObject.SetActive(visible);
-        if (visible)
-        {
-            Root.SetAsLastSibling();
-            Refresh();
-        }
-    }
-
-    public void SetPosition(Vector2 position) => Root.anchoredPosition = position;
-
-    public void Refresh()
+    public override void Refresh()
     {
         if (!Visible) return;
 

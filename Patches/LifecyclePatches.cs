@@ -41,6 +41,8 @@ internal static class LifecyclePatches
             VBloodTracker.OnWorldTeardown();
             ChatKillFeed.OnWorldTeardown();
             ClickGuard.OnWorldTeardown();
+            TypingLock.OnWorldTeardown();
+            FamiliarService.OnWorldTeardown();
             Core.Reset();
         }
         catch (Exception ex)

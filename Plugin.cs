@@ -29,6 +29,7 @@ internal class Plugin : BasePlugin
         Settings.Initialize(Config);
         HuntStore.Load();
         RespawnMemory.Load();
+        FamiliarStore.Load();
 
         _harmony = Harmony.CreateAndPatchAll(typeof(Plugin).Assembly, MyPluginInfo.PLUGIN_GUID);
         Ticker.Start();

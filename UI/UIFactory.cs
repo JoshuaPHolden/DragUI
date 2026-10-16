@@ -7,17 +7,21 @@ namespace VBloodHunter.UI;
 
 internal static class Theme
 {
-    public static readonly Color PanelBg = new(0.055f, 0.05f, 0.06f, 0.92f);
-    public static readonly Color HudBg = new(0.055f, 0.05f, 0.06f, 0.78f);
-    public static readonly Color TitleBg = new(0.30f, 0.06f, 0.08f, 0.95f);
-    public static readonly Color RowAlt = new(1f, 1f, 1f, 0.035f);
-    public static readonly Color RowHunted = new(0.70f, 0.12f, 0.15f, 0.16f);
-    public static readonly Color Button = new(0.20f, 0.18f, 0.20f, 1f);
-    public static readonly Color ButtonHover = new(0.32f, 0.28f, 0.30f, 1f);
-    public static readonly Color ButtonPressed = new(0.14f, 0.12f, 0.14f, 1f);
-    public static readonly Color Accent = new(0.72f, 0.13f, 0.16f, 1f);
-    public static readonly Color AccentHover = new(0.85f, 0.20f, 0.22f, 1f);
-    public static readonly Color Text = new(0.90f, 0.88f, 0.86f, 1f);
+    public static readonly Color PanelBg = new(0.075f, 0.065f, 0.08f, 0.95f);
+    public static readonly Color HudBg = new(0.075f, 0.065f, 0.08f, 0.86f);
+    public static readonly Color CardOutline = new(0.62f, 0.18f, 0.21f, 0.65f);
+    public static readonly Color Shadow = new(0f, 0f, 0f, 0.55f);
+    public static readonly Color TitleBg = new(0.24f, 0.05f, 0.07f, 0.95f);
+    public static readonly Color Divider = new(1f, 1f, 1f, 0.06f);
+    public static readonly Color RowAlt = new(1f, 1f, 1f, 0.03f);
+    public static readonly Color RowHunted = new(0.70f, 0.12f, 0.15f, 0.17f);
+    public static readonly Color Button = new(0.17f, 0.15f, 0.17f, 1f);
+    public static readonly Color ButtonHover = new(0.27f, 0.23f, 0.26f, 1f);
+    public static readonly Color ButtonPressed = new(0.12f, 0.10f, 0.12f, 1f);
+    public static readonly Color ButtonOutline = new(1f, 1f, 1f, 0.08f);
+    public static readonly Color Accent = new(0.66f, 0.12f, 0.15f, 1f);
+    public static readonly Color AccentHover = new(0.80f, 0.18f, 0.21f, 1f);
+    public static readonly Color Text = new(0.92f, 0.90f, 0.88f, 1f);
     public static readonly Color TextDim = new(0.62f, 0.60f, 0.60f, 1f);
     public static readonly Color Alive = new(0.47f, 0.83f, 0.47f, 1f);
     public static readonly Color Respawning = new(0.92f, 0.73f, 0.32f, 1f);
@@ -85,6 +89,71 @@ internal static class UIFactory
         return image;
     }
 
+    /// <summary>Give an image rounded corners of the given radius.</summary>
+    public static Image Rounded(this Image image, float radius)
+    {
+        image.sprite = RoundedSprites.Fill;
+        image.type = Image.Type.Sliced;
+        image.pixelsPerUnitMultiplier = RoundedSprites.MultiplierFor(radius);
+        return image;
+    }
+
+    /// <summary>A thin rounded outline drawn over <paramref name="target"/> (doesn't take clicks).</summary>
+    public static Image AddOutline(RectTransform target, float radius, Color color)
+    {
+        var outline = CreatePanel("Outline", target, color, raycast: false);
+        outline.sprite = RoundedSprites.Outline;
+        outline.type = Image.Type.Sliced;
+        outline.pixelsPerUnitMultiplier = RoundedSprites.MultiplierFor(radius);
+        outline.rectTransform.Fill();
+        return outline;
+    }
+
+    /// <summary>A soft drop shadow behind <paramref name="target"/>'s content (add it before anything else).</summary>
+    public static Image AddShadow(RectTransform target, float offsetY = 4f)
+    {
+        var shadow = CreatePanel("Shadow", target, Theme.Shadow, raycast: false);
+        shadow.sprite = RoundedSprites.Shadow;
+        shadow.type = Image.Type.Sliced;
+        shadow.pixelsPerUnitMultiplier = 1f;
+        float spread = RoundedSprites.ShadowSpread;
+        shadow.rectTransform.Fill(-spread, -spread + offsetY, -spread, -spread - offsetY);
+        return shadow;
+    }
+
+    public sealed class CardRef
+    {
+        public RectTransform Root;
+        public Image Background;
+    }
+
+    /// <summary>A rounded panel with a drop shadow and an outline. Add content as children of Root.</summary>
+    public static CardRef CreateCard(string name, Transform parent, Color background, float radius)
+    {
+        var root = CreateRect(name, parent);
+        AddShadow(root);
+        var bg = CreatePanel("Background", root, background).Rounded(radius);
+        bg.rectTransform.Fill();
+        AddOutline(root, radius, Theme.CardOutline);
+        return new CardRef { Root = root, Background = bg };
+    }
+
+    /// <summary>A thin horizontal divider line.</summary>
+    public static Image CreateDivider(Transform parent, float x, float y, float width)
+    {
+        var line = CreatePanel("Divider", parent, Theme.Divider, raycast: false);
+        line.rectTransform.Place(x, y, width, 1f);
+        return line;
+    }
+
+    /// <summary>A small filled circle (status dot).</summary>
+    public static Image CreateDot(Transform parent, float x, float y, float size, Color color)
+    {
+        var dot = CreatePanel("Dot", parent, color, raycast: false).Rounded(size / 2f);
+        dot.rectTransform.Place(x, y, size, size);
+        return dot;
+    }
+
     public static TextMeshProUGUI CreateText(string name, Transform parent, string text, float size,
         Color color, TextAlignmentOptions alignment = TextAlignmentOptions.MidlineLeft)
     {
@@ -123,11 +192,14 @@ internal static class UIFactory
         }
     }
 
-    public static ButtonRef CreateButton(string name, Transform parent, string label, float fontSize, Action onClick)
+    public static ButtonRef CreateButton(string name, Transform parent, string label, float fontSize, Action onClick,
+        float radius = 6f, bool outline = true)
     {
         var rect = CreateRect(name, parent);
         var image = rect.gameObject.AddComponent<Image>();
         image.color = Color.white; // tinted by the button's ColorBlock
+        if (radius > 0) image.Rounded(radius);
+        if (outline && radius > 0) AddOutline(rect, radius, Theme.ButtonOutline);
         var button = rect.gameObject.AddComponent<Button>();
         button.targetGraphic = image;
         var navigation = button.navigation;
@@ -156,11 +228,67 @@ internal static class UIFactory
 
     public static CheckboxRef CreateCheckbox(string name, Transform parent, Action onClick)
     {
-        var box = CreateButton(name, parent, string.Empty, 12, onClick);
-        box.SetColors(new Color(0.12f, 0.11f, 0.12f, 1f), new Color(0.24f, 0.21f, 0.23f, 1f));
-        var mark = CreatePanel("Mark", box.Rect, Theme.Accent, raycast: false);
-        mark.rectTransform.Fill(4, 4, 4, 4);
+        var box = CreateButton(name, parent, string.Empty, 12, onClick, radius: 5f, outline: false);
+        box.SetColors(new Color(0.11f, 0.10f, 0.11f, 1f), new Color(0.22f, 0.19f, 0.21f, 1f));
+        AddOutline(box.Rect, 5f, new Color(0.62f, 0.18f, 0.21f, 0.8f));
+        var mark = CreatePanel("Mark", box.Rect, Theme.AccentHover, raycast: false).Rounded(3f);
+        mark.rectTransform.Fill(5, 5, 5, 5);
         return new CheckboxRef { Box = box, Mark = mark };
+    }
+
+    /// <summary>A single-line text box. <paramref name="onSubmit"/> runs on Enter with the current text.</summary>
+    public static TMP_InputField CreateInputField(string name, Transform parent, string placeholder, float fontSize,
+        Action<string> onSubmit, int characterLimit = 0)
+    {
+        var rect = CreateRect(name, parent);
+        var background = rect.gameObject.AddComponent<Image>();
+        background.color = new Color(0.11f, 0.10f, 0.11f, 1f);
+        background.Rounded(6f);
+        var outline = AddOutline(rect, 6f, Theme.ButtonOutline);
+
+        var field = rect.gameObject.AddComponent<TMP_InputField>();
+        var navigation = field.navigation;
+        navigation.mode = Navigation.Mode.None;
+        field.navigation = navigation;
+        field.transition = Selectable.Transition.None;
+        field.targetGraphic = background;
+        field.lineType = TMP_InputField.LineType.SingleLine;
+        field.characterLimit = characterLimit;
+        field.onFocusSelectAll = false;
+        // TMP's default caret is invisible on a dark fill.
+        field.customCaretColor = true;
+        field.caretColor = Theme.Text;
+        field.caretWidth = 2;
+        field.selectionColor = new Color(0.66f, 0.12f, 0.15f, 0.5f);
+
+        var viewport = CreateRect("TextArea", rect).Fill(8, 0, 8, 0);
+        viewport.gameObject.AddComponent<RectMask2D>();
+
+        var hint = CreateText("Placeholder", viewport, placeholder, fontSize, Theme.TextDim);
+        hint.fontStyle = FontStyles.Italic;
+        hint.rectTransform.Fill();
+        var text = CreateText("Text", viewport, string.Empty, fontSize, Theme.Text);
+        text.overflowMode = TextOverflowModes.Overflow; // the field scrolls long text itself
+        text.rectTransform.Fill();
+
+        field.textViewport = viewport;
+        field.textComponent = text;
+        field.placeholder = hint;
+        if (Font != null) field.fontAsset = Font;
+
+        field.onSelect.AddListener((UnityEngine.Events.UnityAction<string>)(_ =>
+        {
+            outline.color = Theme.CardOutline;
+            // A selected-but-inactive field shows no caret and doesn't count as typing.
+            try { if (!field.isFocused) field.ActivateInputField(); } catch { }
+        }));
+        field.onDeselect.AddListener((UnityEngine.Events.UnityAction<string>)(_ => outline.color = Theme.ButtonOutline));
+        field.onSubmit.AddListener((UnityEngine.Events.UnityAction<string>)(value =>
+        {
+            try { onSubmit?.Invoke(value); }
+            catch (Exception ex) { Core.Log.LogError($"Text box '{name}' failed: {ex}"); }
+        }));
+        return field;
     }
 
     public sealed class ScrollRef
@@ -187,7 +315,7 @@ internal static class UIFactory
         content.anchoredPosition = Vector2.zero;
         content.sizeDelta = new Vector2(0f, 0f);
 
-        var track = CreatePanel("Scrollbar", root, new Color(1f, 1f, 1f, 0.06f));
+        var track = CreatePanel("Scrollbar", root, new Color(1f, 1f, 1f, 0.05f)).Rounded(scrollbarWidth / 2f);
         var trackRect = track.rectTransform;
         trackRect.anchorMin = new Vector2(1f, 0f);
         trackRect.anchorMax = new Vector2(1f, 1f);
@@ -196,7 +324,7 @@ internal static class UIFactory
         trackRect.anchoredPosition = Vector2.zero;
 
         var slidingArea = CreateRect("SlidingArea", trackRect).Fill();
-        var handle = CreatePanel("Handle", slidingArea, new Color(0.62f, 0.20f, 0.22f, 0.9f));
+        var handle = CreatePanel("Handle", slidingArea, new Color(0.62f, 0.20f, 0.22f, 0.9f)).Rounded(scrollbarWidth / 2f);
         handle.rectTransform.Fill();
 
         var scrollbar = track.gameObject.AddComponent<Scrollbar>();
