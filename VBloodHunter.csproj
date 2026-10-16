@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>VBloodHunter</AssemblyName>
+    <RootNamespace>VBloodHunter</RootNamespace>
+    <Version>0.1.2</Version>
+    <Description>Client-side V Blood hunt list: pick the V Bloods you want to hunt, see their alive/respawn status on screen, and switch the tracked V Blood with one click.</Description>
+    <BepInExPluginGuid>nezoic.VBloodHunter</BepInExPluginGuid>
+    <CheckEolTargetFramework>false</CheckEolTargetFramework>
+    <RestoreSources>
+      https://api.nuget.org/v3/index.json;
+      https://nuget.bepinex.dev/v3/index.json;
+    </RestoreSources>
+
+    <!-- Copy the built DLL into the r2modman profile the game is launched from:
+           dotnet build -p:DeployToClient=true
+         Other profile: -p:R2ModmanProfile=Name
+         Any other BepInEx install: -p:ClientPluginDirectory="...\BepInEx\plugins\VBloodHunter" -->
+    <DeployToClient>false</DeployToClient>
+    <R2ModmanProfile Condition="'$(R2ModmanProfile)' == ''">Default</R2ModmanProfile>
+    <ClientPluginDirectory Condition="'$(ClientPluginDirectory)' == ''">$(APPDATA)\r2modmanPlus-local\VRising\profiles\$(R2ModmanProfile)\BepInEx\plugins\VBloodHunter</ClientPluginDirectory>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BepInEx.PluginInfoProps" Version="2.1.0" />
+    <PackageReference Include="BepInEx.Unity.IL2CPP" Version="[6.0.0-be.733]" IncludeAssets="compile" />
+    <PackageReference Include="VampireReferenceAssemblies" Version="[1.1.12-r99041-b2]" />
+  </ItemGroup>
+
+  <Target Name="DeployToClientDir" AfterTargets="Build" Condition="'$(DeployToClient)' == 'true'">
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(ClientPluginDirectory)" SkipUnchangedFiles="true" />
+    <Message Importance="high" Text="VBloodHunter -> $(ClientPluginDirectory)" />
+  </Target>
+
+</Project>
