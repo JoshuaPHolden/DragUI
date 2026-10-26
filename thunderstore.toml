@@ -4,10 +4,10 @@
 schemaVersion = "0.0.1"
 
 [package]
-namespace = "nezoic"
+namespace = "Dragula"
 name = "DragUI"
-versionNumber = "0.12.0"
-description = "Client-side utility UI for V Rising: V Blood hunt tracker, familiar quick-summon, boss alarms, auto teleport accept, XP/hour, DPS meter and a full character sheet."
+versionNumber = "1.1.0"
+description = "Client-side utility UI for V Rising: V Blood hunt tracker, familiar quick-summon, one-click loadouts, DPS meter, XP/hour, full character sheet, teleport tools and boss alarms."
 websiteUrl = "https://github.com/JoshuaPHolden/DragUI"
 containsNsfwContent = false
 
@@ -22,6 +22,10 @@ outdir = "./build"
 [[build.copy]]
 source = "./bin/Release/net6.0/DragUI.dll"
 target = "DragUI.dll"
+
+[[build.copy]]
+source = "./CHANGELOG.md"
+target = "CHANGELOG.md"
 
 [publish]
 repository = "https://thunderstore.io"

@@ -3,9 +3,10 @@ using BepInEx;
 
 namespace DragUI.Services;
 
-// Server-specific boss alarm: AlarmLeadMinutes before each scheduled spawn a soft chime plays (time to
-// get out of combat) and a teleport button for that boss shows on the control bar, flashing at first and
-// staying until ButtonMinutes after the spawn. The schedule is a text file so it can be fitted to
+// Server-specific boss alarm (Noctveil's Apex/Prime bosses by default; set up in Server Settings ->
+// Noctveil): AlarmLeadMinutes before each scheduled spawn a soft chime plays (time to get out of combat)
+// and a teleport notice for that boss goes into the control bar's notification slot, flashing at first
+// and staying until ButtonMinutes after the spawn (unless a newer notice replaces it). The schedule is a text file so it can be fitted to
 // any server; each line is "time | label | command", e.g. "23:00 | Apex Judgement | .stp tp apex".
 // Times are wall-clock in Settings.AlarmTimeZone (empty = this PC's time zone).
 internal static class BossAlarm
@@ -15,6 +16,7 @@ internal static class BossAlarm
     /// <summary>One occurrence of a scheduled event; At is the spawn time.</summary>
     public readonly record struct Occurrence(ScheduledEvent Event, DateTime At);
 
+    const string NoticeSource = "BossAlarm";
     const double CheckIntervalSeconds = 1;
     const double TeleportCooldownSeconds = 2;
 
@@ -48,12 +50,18 @@ internal static class BossAlarm
     static DateTime _lastChecked;     // schedule-zone time of the last check (alarms fire for events after it)
     static double _nextCheckAt;
     static double _lastTeleportAt = double.NegativeInfinity;
+    static Occurrence? _noticeFor;    // occurrence a notice was last posted for (posted once each)
 
     /// <summary>The boss whose button is showing (from its alarm until ButtonMinutes after it spawns), if any.</summary>
     public static Occurrence? Active { get; private set; }
     /// <summary>True during the first FlashMinutes after the active boss's alarm.</summary>
     public static bool Flashing { get; private set; }
     public static Occurrence? Next { get; private set; }
+    public static IReadOnlyList<ScheduledEvent> Schedule => _schedule;
+    /// <summary>Where the schedule is read from.</summary>
+    public static string SchedulePath => _path;
+    /// <summary>The time zone the schedule's times are in.</summary>
+    public static string TimeZoneName { get { Now(); return _timeZone.StandardName; } }
 
     public static bool Enabled => Settings.AlarmEnabled;
 
@@ -123,6 +131,8 @@ internal static class BossAlarm
             Next = null;
             Flashing = false;
             _lastChecked = default;
+            _noticeFor = null;
+            Notifications.Clear(NoticeSource);
             return;
         }
 
@@ -153,7 +163,44 @@ internal static class BossAlarm
         double sinceAlarm = latest is { } l ? (now - (l.At - lead)).TotalMinutes : double.MaxValue;
         Active = sinceAlarm < lead.TotalMinutes + Settings.AlarmButtonMinutes ? latest : null;
         Flashing = Active != null && sinceAlarm < Settings.AlarmFlashMinutes;
+        if (Active is { } active && !Equals(_noticeFor, active)) PostNotice(active);
     }
+
+    // Once per boss: when its alarm goes off, or at login while its button window is still open.
+    static void PostNotice(Occurrence occurrence)
+    {
+        _noticeFor = occurrence;
+        Notifications.Post(new Notifications.Notice
+        {
+            Source = NoticeSource,
+            GetText = TeleportLabel,
+            OnClick = TeleportToActive,
+            IsFlashing = () => Flashing && Equals(Active, occurrence),
+            IsOver = () => !Equals(Active, occurrence),
+        });
+    }
+
+    /// <summary>Notice text: counts down to the spawn while the alarm's lead time runs.</summary>
+    public static string TeleportLabel()
+    {
+        if (Active is not { } active) return "Teleport";
+        var wait = Until(active);
+        return wait > TimeSpan.Zero
+            ? $"TP {active.Event.Label} {(int)wait.TotalMinutes}:{wait.Seconds:00}"
+            : $"TP {active.Event.Label}";
+    }
+
+    /// <summary>"Next: Apex Judgement at 23:00 (in 42m)", or why there's none.</summary>
+    public static string StatusText()
+    {
+        if (!Enabled) return "Alarm off.";
+        if (_schedule.Count == 0) return $"No bosses in {Path.GetFileName(_path)}.";
+        if (Next is not { } next) return "Alarm on.";
+        return $"Next: {next.Event.Label} at {next.At:HH:mm} (in {FormatWait(Until(next))})";
+    }
+
+    public static string FormatWait(TimeSpan wait) =>
+        wait.TotalMinutes < 1 ? "<1m" : wait.TotalHours >= 1 ? $"{(int)wait.TotalHours}h{wait.Minutes:00}" : $"{(int)wait.TotalMinutes}m";
 
     /// <summary>Time left until an occurrence.</summary>
     public static TimeSpan Until(Occurrence occurrence) => occurrence.At - Now();
@@ -180,5 +227,6 @@ internal static class BossAlarm
         Next = null;
         Flashing = false;
         _lastChecked = default;
+        _noticeFor = null;
     }
 }

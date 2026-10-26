@@ -45,7 +45,9 @@ internal static class LifecyclePatches
             FamiliarService.OnWorldTeardown();
             FamiliarCatalog.OnWorldTeardown();
             BossAlarm.OnWorldTeardown();
+            Notifications.OnWorldTeardown();
             AutoTeleport.OnWorldTeardown();
+            TeleportStore.OnWorldTeardown();
             ExperienceTracker.OnWorldTeardown();
             DamageMeter.OnWorldTeardown();
             BloodcraftStats.OnWorldTeardown();

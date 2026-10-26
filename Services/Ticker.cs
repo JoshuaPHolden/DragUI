@@ -50,6 +50,7 @@ internal static class Ticker
                 VBloodTracker.Tick();
                 BossAlarm.Tick();
                 AutoTeleport.Tick();
+                TeleportStore.Tick();
                 if (Settings.XpEnabled) ExperienceTracker.Tick();
                 if (Settings.DpsEnabled) DamageMeter.Tick();
                 if (Settings.SheetEnabled) PerkshopStats.Tick();

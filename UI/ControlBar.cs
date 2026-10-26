@@ -16,7 +16,7 @@ internal sealed class ControlBar
     const float Gap = 4f;
     const float Radius = 10f;
     const float FlashSpeed = 2.5f; // pulses per second
-    const float ResizeWidth = 14f;
+    const float ResizeWidth = 18f;
 
     public sealed class Entry
     {
@@ -45,7 +45,6 @@ internal sealed class ControlBar
     readonly List<(Entry Entry, UIFactory.ButtonRef Button)> _buttons = new();
     readonly bool[] _shown;
     readonly RectTransform[] _gripDots = new RectTransform[6];
-    readonly RectTransform[] _resizeDots = new RectTransform[3];
     readonly List<Menu> _menus = new();
     Menu _openMenu;
     float _width;   // requested button-area width; 0 = one row
@@ -91,10 +90,16 @@ internal sealed class ControlBar
         }
         _shown = new bool[_buttons.Count];
 
-        // A full-height strip on the right edge, faintly lit so it reads as something to grab.
+        // A full-height strip on the right edge, faintly lit so it reads as something to grab, with a
+        // column-resize icon (drag sideways) so it isn't mistaken for the move grip's dots.
         ResizeHandle = UIFactory.CreatePanel("Resize", Root, new Color(1f, 1f, 1f, 0.06f)).Rounded(5f).rectTransform;
-        for (int i = 0; i < _resizeDots.Length; i++)
-            _resizeDots[i] = UIFactory.CreateDot(ResizeHandle, 0, 0, 3, Theme.TextDim).rectTransform;
+        var icon = UIFactory.CreatePanel("Icon", ResizeHandle, Theme.TextDim, raycast: false);
+        icon.sprite = Icons.ResizeHorizontal;
+        icon.preserveAspect = true;
+        var iconRect = icon.rectTransform;
+        iconRect.anchorMin = iconRect.anchorMax = iconRect.pivot = new Vector2(0.5f, 0.5f);
+        iconRect.anchoredPosition = Vector2.zero;
+        iconRect.sizeDelta = new Vector2(ResizeWidth - 2f, ResizeWidth - 2f);
 
         // After the buttons so they draw over the bar.
         foreach (var menu in _menus) BuildMenu(menu);
@@ -178,11 +183,8 @@ internal sealed class ControlBar
         for (int i = 0; i < _gripDots.Length; i++)
             _gripDots[i].Place(5 + i % 2 * 6, dotsTop + i / 2 * 6, 3, 3);
 
-        // Resize strip: the same height, its dots in a centred column.
+        // Resize strip: the same height (its "<>" label fills it, centred).
         ResizeHandle.Place(left + width + Gap, Pad, ResizeWidth, gripHeight);
-        float resizeTop = Mathf.Ceil((gripHeight - 15f) / 2f);
-        for (int i = 0; i < _resizeDots.Length; i++)
-            _resizeDots[i].Place((ResizeWidth - 3f) / 2f, resizeTop + i * 6, 3, 3);
         if (_openMenu != null) SetMenu(_openMenu); // follow its button
     }
 

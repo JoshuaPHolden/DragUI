@@ -29,13 +29,33 @@ internal static class LoadoutService
     // Ability bar slots holding spells (AbilityTypeEnum: SpellSlot1 = 5, SpellSlot2 = 6, Ultimate = 7).
     static readonly (int SlotId, string Key)[] SpellSlots = { (5, "SpellSlot1"), (6, "SpellSlot2"), (7, "Ultimate") };
 
-    static readonly Queue<(Action Run, double Wait)> _steps = new();
+    static readonly Queue<(Action Run, double Wait, string Label)> _steps = new();
     static readonly List<string> _missing = new();
     static double _nextStepAt;
+    static int _total;          // steps in the running apply
+    static int _ran = -1;       // index of the last step run (-1 = none yet)
+    static double _ranAt, _ranWait;
 
-    /// <summary>What the last apply did (or is doing), for the panel.</summary>
-    public static string Status { get; private set; } = string.Empty;
-    public static bool Busy => _steps.Count > 0;
+    public static bool Busy => _steps.Count > 0 || (_total > 0 && Time.realtimeSinceStartupAsDouble < _nextStepAt);
+    /// <summary>The loadout being (or last) applied.</summary>
+    public static string ApplyingName { get; private set; } = string.Empty;
+    /// <summary>What the running apply is doing now ("Equipping Chest", ...).</summary>
+    public static string StepLabel { get; private set; } = string.Empty;
+    /// <summary>What went wrong in the last apply (items not in the inventory), empty if nothing.</summary>
+    public static string Problem { get; private set; } = string.Empty;
+    /// <summary>realtimeSinceStartup when the last apply finished (0 = none yet).</summary>
+    public static double FinishedAt { get; private set; }
+
+    /// <summary>0..1 through the running apply, moving smoothly through each step's wait.</summary>
+    public static float Progress
+    {
+        get
+        {
+            if (_total == 0 || _ran < 0) return 0f;
+            double into = _ranWait > 0 ? Math.Min(1.0, (Time.realtimeSinceStartupAsDouble - _ranAt) / _ranWait) : 1.0;
+            return Mathf.Clamp01((float)((_ran + into) / _total));
+        }
+    }
 
     public static Loadout Capture(string name)
     {
@@ -54,10 +74,6 @@ internal static class LoadoutService
         return loadout;
     }
 
-    /// <summary>True if applying would change an already chosen Bloodcraft class (which costs items).</summary>
-    public static bool NeedsClassChange(Loadout loadout) =>
-        loadout.ClassId > 0 && BloodcraftStats.ProgressKnown && BloodcraftStats.ClassId > 0 && BloodcraftStats.ClassId != loadout.ClassId;
-
     /// <summary>One line for the list: class, weapon and counts.</summary>
     public static string Describe(Loadout loadout)
     {
@@ -71,35 +87,35 @@ internal static class LoadoutService
         return string.Join("  ·  ", parts);
     }
 
-    /// <param name="changeClass">Also change an already chosen class (the player confirmed the cost).</param>
-    public static void Apply(Loadout loadout, bool changeClass)
+    /// <summary>Put <paramref name="loadout"/> on, step by step (Tick runs the steps). Changes the Bloodcraft
+    /// class too if it differs, which costs whatever the server charges for .class c.</summary>
+    public static void Apply(Loadout loadout)
     {
         _steps.Clear();
         _missing.Clear();
         _nextStepAt = 0;
-        Status = $"Applying {loadout.Name}...";
-        string note = string.Empty;
+        _ran = -1;
+        ApplyingName = loadout.Name;
+        Problem = string.Empty;
 
         if (loadout.ClassId > 0 && BloodcraftStats.ProgressKnown && BloodcraftStats.ClassId != loadout.ClassId)
         {
             string name = BloodcraftStats.ClassNames[loadout.ClassId - 1];
-            if (BloodcraftStats.ClassId == 0) Command($".class s {name}");
-            else if (changeClass) Command($".class c {name}");
-            else note = " Class not changed.";
+            Command(BloodcraftStats.ClassId == 0 ? $".class s {name}" : $".class c {name}", $"Changing class to {BloodcraftStats.ClassLabel(loadout.ClassId)}");
         }
 
         foreach (var type in GearSlots)
         {
             if (!loadout.Gear.TryGetValue(type.ToString(), out int guid) || guid == 0) continue;
             var slot = type;
-            _steps.Enqueue((() => EquipGear(slot, guid), StepSeconds));
+            _steps.Enqueue((() => EquipGear(slot, guid), StepSeconds, $"Equipping {GearLabel(type)}"));
         }
 
         foreach (var (_, key) in SpellSlots)
         {
             if (!loadout.Spells.TryGetValue(key, out int guid) || guid == 0) continue;
             string slot = key;
-            _steps.Enqueue((() => SetSpell(slot, guid), StepSeconds));
+            _steps.Enqueue((() => SetSpell(slot, guid), StepSeconds, "Setting spells"));
         }
 
         // Only when the set differs: clear every slot, then fill them in order (a passive can't be equipped
@@ -110,12 +126,12 @@ internal static class LoadoutService
             for (int i = 0; i < PassiveSlots; i++)
             {
                 int slot = i;
-                _steps.Enqueue((() => GameEvents.UnequipPassive(slot), StepSeconds));
+                _steps.Enqueue((() => GameEvents.UnequipPassive(slot), StepSeconds, "Clearing passives"));
             }
             for (int i = 0; i < loadout.Passives.Count && i < PassiveSlots; i++)
             {
                 int slot = i, guid = loadout.Passives[i];
-                _steps.Enqueue((() => GameEvents.EquipPassive(new PrefabGUID(guid), slot), StepSeconds));
+                _steps.Enqueue((() => GameEvents.EquipPassive(new PrefabGUID(guid), slot), StepSeconds, "Equipping passives"));
             }
         }
 
@@ -126,17 +142,25 @@ internal static class LoadoutService
             _steps.Enqueue((() =>
             {
                 if (BloodcraftStats.ShiftSpell != shift) ChatCommandSender.TrySend($".class csp {shift + 1}");
-            }, CommandSeconds));
+            }, CommandSeconds, "Setting shift spell"));
         }
 
-        string loadoutName = loadout.Name;
         _steps.Enqueue((() =>
         {
-            Status = _missing.Count == 0
-                ? $"Applied {loadoutName}.{note}"
-                : $"Applied {loadoutName}.{note} Not in your inventory: {string.Join(", ", _missing)}.";
-        }, 0));
+            Problem = _missing.Count == 0 ? string.Empty : $"Not in your inventory: {string.Join(", ", _missing)}.";
+            FinishedAt = Time.realtimeSinceStartupAsDouble;
+        }, 0, "Done"));
+        _total = _steps.Count;
+        StepLabel = _steps.Peek().Label;
     }
+
+    static string GearLabel(EquipmentType type) => type switch
+    {
+        EquipmentType.MagicSource => "amulet",
+        EquipmentType.Headgear => "head",
+        EquipmentType.Footgear => "boots",
+        _ => type.ToString().ToLowerInvariant(),
+    };
 
     /// <summary>Per frame while in game: run the next step when it's due.</summary>
     public static void Tick()
@@ -144,8 +168,12 @@ internal static class LoadoutService
         if (_steps.Count == 0) return;
         double now = Time.realtimeSinceStartupAsDouble;
         if (now < _nextStepAt) return;
-        var (run, wait) = _steps.Dequeue();
+        var (run, wait, label) = _steps.Dequeue();
         _nextStepAt = now + wait;
+        _ran++;
+        _ranAt = now;
+        _ranWait = wait;
+        StepLabel = label;
         try
         {
             run();
@@ -160,10 +188,13 @@ internal static class LoadoutService
     {
         _steps.Clear();
         _missing.Clear();
-        Status = string.Empty;
+        _total = 0;
+        _ran = -1;
+        Problem = string.Empty;
+        FinishedAt = 0;
     }
 
-    static void Command(string command) => _steps.Enqueue((() => ChatCommandSender.TrySend(command), CommandSeconds));
+    static void Command(string command, string label) => _steps.Enqueue((() => ChatCommandSender.TrySend(command), CommandSeconds, label));
 
     static void EquipGear(EquipmentType type, int guid)
     {

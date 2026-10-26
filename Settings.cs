@@ -31,6 +31,10 @@ internal static class Settings
     static ConfigEntry<bool> _cooldownTesterEnabled;
     static ConfigEntry<bool> _loadoutsEnabled;
     static ConfigEntry<float> _loadoutPanelX, _loadoutPanelY;
+    static ConfigEntry<float> _noctveilPanelX, _noctveilPanelY;
+    static ConfigEntry<float> _teleportPanelX, _teleportPanelY;
+    static ConfigEntry<float> _teleportPopoutX, _teleportPopoutY;
+    static ConfigEntry<bool> _teleportPopoutVisible;
     static ConfigEntry<float> _cdPanelX, _cdPanelY;
     static ConfigEntry<float> _sheetPanelX, _sheetPanelY;
     static ConfigEntry<float> _dpsFightTimeout;
@@ -115,6 +119,26 @@ internal static class Settings
         set { _loadoutPanelX.Value = Mathf.Round(value.x); _loadoutPanelY.Value = Mathf.Round(value.y); }
     }
 
+    public static Vector2 TeleportPanelPosition
+    {
+        get => new(_teleportPanelX.Value, _teleportPanelY.Value);
+        set { _teleportPanelX.Value = Mathf.Round(value.x); _teleportPanelY.Value = Mathf.Round(value.y); }
+    }
+
+    public static Vector2 TeleportPopoutPosition
+    {
+        get => new(_teleportPopoutX.Value, _teleportPopoutY.Value);
+        set { _teleportPopoutX.Value = Mathf.Round(value.x); _teleportPopoutY.Value = Mathf.Round(value.y); }
+    }
+
+    public static bool TeleportPopoutVisible { get => _teleportPopoutVisible.Value; set => _teleportPopoutVisible.Value = value; }
+
+    public static Vector2 NoctveilPanelPosition
+    {
+        get => new(_noctveilPanelX.Value, _noctveilPanelY.Value);
+        set { _noctveilPanelX.Value = Mathf.Round(value.x); _noctveilPanelY.Value = Mathf.Round(value.y); }
+    }
+
     public static Vector2 DpsPanelPosition
     {
         get => new(_dpsPanelX.Value, _dpsPanelY.Value);
@@ -184,12 +208,12 @@ internal static class Settings
             "A gap longer than this (minutes) without any experience isn't counted as play time, so being AFK doesn't lower XP/hour.");
         _autoTeleport = config.Bind("AutoTeleport", "Enabled", false,
             "Automatically accept ScarletTeleports teleport requests (sends '.stp tpa <name>' when someone requests to teleport to you). " +
-            "Toggle it with the Auto TP button on the control bar.");
+            "Toggle it in the Teleport window (Teleport on the control bar); with it off, requests wait there and in the notification slot.");
         _autoTeleportOnlyFrom = config.Bind("AutoTeleport", "OnlyFrom", "",
             "Only auto-accept requests from these players (comma-separated character names). Empty = anyone who requests.");
         _alarmEnabled = config.Bind("BossAlarm", "Enabled", false,
             "Sound an alarm and show a teleport button at each time in BepInEx/config/DragUI/boss-schedule.txt. " +
-            "Server-specific: the default schedule is one server's Apex/Prime bosses. Toggle it with the Alarm button on the control bar.");
+            "Server-specific: the default schedule is the Noctveil server's Apex/Prime bosses. Toggle it in Server Settings -> Noctveil on the control bar.");
         _alarmVolume = config.Bind("BossAlarm", "Volume", 0.35f,
             "Alarm chime volume, 0 - 1 (0 = silent). Played through Windows, so the game's volume sliders don't affect it.");
         _alarmLeadMinutes = config.Bind("BossAlarm", "LeadMinutes", 2f,
@@ -223,6 +247,14 @@ internal static class Settings
         _sheetPanelY = config.Bind("Layout", "CharacterPanelY", 0f, "Character sheet window offset from the screen centre (y).");
         _loadoutPanelX = config.Bind("Layout", "LoadoutPanelX", -300f, "Loadouts window offset from the screen centre (x). Drag its title bar to change.");
         _loadoutPanelY = config.Bind("Layout", "LoadoutPanelY", 60f, "Loadouts window offset from the screen centre (y).");
+        _teleportPanelX = config.Bind("Layout", "TeleportPanelX", -340f, "Teleport window offset from the screen centre (x). Drag its title bar to change.");
+        _teleportPanelY = config.Bind("Layout", "TeleportPanelY", 0f, "Teleport window offset from the screen centre (y).");
+        _teleportPopoutX = config.Bind("Layout", "TeleportPopoutX", 16f, "Teleport pop-out left edge, in reference pixels from the left of the screen. Drag its header to change.");
+        _teleportPopoutY = config.Bind("Layout", "TeleportPopoutY", -420f, "Teleport pop-out top edge, in reference pixels from the top of the screen (negative = down).");
+        _teleportPopoutVisible = config.Bind("Layout", "TeleportPopoutVisible", false,
+            "Whether the teleport pop-out (quick teleport buttons) is open. Open it with Pop out in the Teleport window.");
+        _noctveilPanelX = config.Bind("Layout", "NoctveilPanelX", 320f, "Noctveil server settings window offset from the screen centre (x). Drag its title bar to change.");
+        _noctveilPanelY = config.Bind("Layout", "NoctveilPanelY", 40f, "Noctveil server settings window offset from the screen centre (y).");
         _dpsPanelX = config.Bind("Layout", "DpsPanelX", -320f, "DPS meter window offset from the screen centre (x). Drag its title bar to change.");
         _dpsPanelY = config.Bind("Layout", "DpsPanelY", 0f, "DPS meter window offset from the screen centre (y).");
         _xpPanelX = config.Bind("Layout", "XpPanelX", 0f, "Experience window offset from the screen centre (x). Drag its title bar to change.");

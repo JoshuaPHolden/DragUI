@@ -6,10 +6,9 @@ using DragUI.Services;
 
 namespace DragUI.UI;
 
-// Saved builds: type a name and Save to record what's on now; Apply puts a saved one back on, Update
-// re-records it, x deletes it. Overwriting a saved loadout (Update, or Save with a name that's taken)
-// and deleting one ask first in a prompt. Applying a loadout that changes an already chosen Bloodcraft class (which costs
-// items) asks too: its Apply button turns into Confirm for a few seconds.
+// Saved builds: type a name and Save to record what's on now; Apply puts a saved one back on (with a
+// progress bar while it runs), Update re-records it, x deletes it. Overwriting a saved loadout (Update,
+// or Save with a name that's taken) and deleting one ask first in a prompt.
 internal sealed class LoadoutPanel : Window
 {
     const float PanelWidth = 460f;
@@ -21,18 +20,19 @@ internal sealed class LoadoutPanel : Window
     const float FooterHeight = 48f;
     const float ApplyWidth = 74f;
     const float UpdateWidth = 66f;
-    const double ConfirmSeconds = 6;
+    const float BarHeight = 22f;
+    const double DoneShowSeconds = 2.5; // the full bar stays up this long after an apply
 
     readonly TMP_InputField _input;
     readonly TextMeshProUGUI _status;
+    readonly RectTransform _bar;
+    readonly RectTransform _fill;
+    readonly TextMeshProUGUI _barLabel;
     readonly TextMeshProUGUI _empty;
     readonly UIFactory.ScrollRef _scroll;
     readonly ConfirmDialog _prompt;
     readonly List<RectTransform> _rows = new();
-    readonly Dictionary<string, UIFactory.ButtonRef> _applyButtons = new(StringComparer.OrdinalIgnoreCase);
-    string _message;    // shown instead of the last apply's status until the next apply
-    string _confirming; // loadout waiting for a second click to change class
-    double _confirmUntil;
+    string _message; // shown instead of the last apply's problem until the next apply
 
     public override Vector2 SavedPosition
     {
@@ -54,6 +54,16 @@ internal sealed class LoadoutPanel : Window
         _status = UIFactory.CreateText("Status", Root, string.Empty, 12, Theme.TextDim);
         _status.enableWordWrapping = true;
         _status.rectTransform.Place(14, StatusY - 2, Width - 28, 30);
+
+        // Progress bar, in the status line's place while a loadout is being applied.
+        _bar = UIFactory.CreatePanel("Progress", Root, Theme.Button, raycast: false).Rounded(6f).rectTransform;
+        _bar.Place(14, StatusY, Width - 28, BarHeight);
+        _fill = UIFactory.CreatePanel("Fill", _bar, Theme.Accent, raycast: false).Rounded(5f).rectTransform;
+        _fill.Place(2, 2, 0, BarHeight - 4);
+        _barLabel = UIFactory.CreateText("Label", _bar, string.Empty, 11, Theme.Text, TextAlignmentOptions.Center);
+        _barLabel.overflowMode = TextOverflowModes.Ellipsis;
+        _barLabel.rectTransform.Fill(8, 0, 8, 0);
+        _bar.gameObject.SetActive(false);
 
         var label = UIFactory.CreateText("Saved", Root, "SAVED", 11, Theme.TextDim);
         label.characterSpacing = 4f;
@@ -119,7 +129,6 @@ internal sealed class LoadoutPanel : Window
     {
         foreach (var row in _rows) Object.Destroy(row.gameObject);
         _rows.Clear();
-        _applyButtons.Clear();
 
         var loadouts = LoadoutStore.Loadouts;
         for (int i = 0; i < loadouts.Count; i++) _rows.Add(CreateRow(loadouts[i], i));
@@ -156,7 +165,6 @@ internal sealed class LoadoutPanel : Window
         var apply = UIFactory.CreateButton("Apply", rect, "Apply", 13, () => OnApply(name), radius: 6f);
         apply.Rect.Place(x, 12, ApplyWidth, 24);
         apply.SetColors(Theme.Accent, Theme.AccentHover);
-        _applyButtons[name] = apply;
         return rect;
     }
 
@@ -164,39 +172,34 @@ internal sealed class LoadoutPanel : Window
     {
         var loadout = LoadoutStore.Find(name);
         if (loadout == null) return;
-
-        double now = Time.realtimeSinceStartupAsDouble;
-        bool confirmed = string.Equals(_confirming, name, StringComparison.OrdinalIgnoreCase) && now < _confirmUntil;
-        if (LoadoutService.NeedsClassChange(loadout) && !confirmed)
-        {
-            SetConfirming(name, now + ConfirmSeconds);
-            _message = $"{name} changes your class to {BloodcraftStats.ClassLabel(loadout.ClassId)}, which costs items " +
-                       "(a server setting, 750 by default). Click Confirm to go ahead.";
-            return;
-        }
-
-        SetConfirming(null, 0);
         _message = null;
-        LoadoutService.Apply(loadout, changeClass: confirmed);
+        LoadoutService.Apply(loadout);
     }
 
-    void SetConfirming(string name, double until)
-    {
-        if (_confirming != null && _applyButtons.TryGetValue(_confirming, out var previous)) previous.Label.text = "Apply";
-        _confirming = name;
-        _confirmUntil = until;
-        if (name != null && _applyButtons.TryGetValue(name, out var button)) button.Label.text = "Confirm";
-    }
-
-    public override void Refresh()
+    /// <summary>Per frame while visible: the progress bar during an apply (and briefly after), else the status line.</summary>
+    public void UpdateProgress()
     {
         if (!Visible) return;
-        if (_confirming != null && Time.realtimeSinceStartupAsDouble >= _confirmUntil)
+        bool busy = LoadoutService.Busy;
+        bool justDone = !busy && _message == null && LoadoutService.FinishedAt > 0
+            && Time.realtimeSinceStartupAsDouble - LoadoutService.FinishedAt < DoneShowSeconds;
+        bool showBar = busy || justDone;
+        if (_bar.gameObject.activeSelf != showBar) _bar.gameObject.SetActive(showBar);
+        if (_status.gameObject.activeSelf == showBar) _status.gameObject.SetActive(!showBar);
+
+        if (showBar)
         {
-            SetConfirming(null, 0);
-            _message = null;
+            float progress = busy ? LoadoutService.Progress : 1f;
+            _fill.sizeDelta = new Vector2((Width - 28 - 4) * progress, BarHeight - 4);
+            string label = busy
+                ? $"{LoadoutService.ApplyingName}: {LoadoutService.StepLabel}  {progress * 100f:0}%"
+                : LoadoutService.Problem.Length == 0 ? $"Applied {LoadoutService.ApplyingName}" : $"Applied {LoadoutService.ApplyingName} (some items missing)";
+            if (_barLabel.text != label) _barLabel.text = label;
         }
-        string status = _message ?? LoadoutService.Status;
-        if (_status.text != status) _status.text = status;
+        else
+        {
+            string status = _message ?? LoadoutService.Problem;
+            if (_status.text != status) _status.text = status;
+        }
     }
 }

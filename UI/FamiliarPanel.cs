@@ -26,6 +26,7 @@ internal sealed class FamiliarPanel : Window
     const float TabWidth = 84f;
     const float AllRowHeight = 40f;
     const double ConfirmSeconds = 4;
+    const double NoteSeconds = 5;
 
     const string SavedFooter =
         "Binds with Bloodcraft's .fam sb (partial names work, not in combat); summoning the bound familiar again calls/dismisses it (.fam t). " +
@@ -53,6 +54,8 @@ internal sealed class FamiliarPanel : Window
     readonly Dictionary<string, UIFactory.ButtonRef> _keyButtons = new(StringComparer.OrdinalIgnoreCase);
     readonly Dictionary<string, TextMeshProUGUI> _nameLabels = new(StringComparer.OrdinalIgnoreCase);
     string _capturing; // saved name waiting for a key press
+    string _note;      // a hotkey clash, shown instead of the status for a few seconds
+    double _noteUntil;
 
     /// <summary>True while waiting for the player to press a key to bind (game keys are locked meanwhile).</summary>
     public bool Capturing => _capturing != null;
@@ -305,14 +308,22 @@ internal sealed class FamiliarPanel : Window
         {
             string name = _capturing;
             StopCapture();
-            FamiliarStore.SetHotkey(name, hotkey);
+            string other = HotkeyOwners.UsedByOther(hotkey, HotkeyOwners.Feature.Familiar);
+            if (other == null) FamiliarStore.SetHotkey(name, hotkey);
+            else
+            {
+                _note = $"{hotkey} is already {other}. Pick another key.";
+                _noteUntil = Time.realtimeSinceStartupAsDouble + NoteSeconds;
+            }
         }
     }
 
     public override void Refresh()
     {
         if (!Visible) return;
-        _status.text = FamiliarService.LastStatus;
+        bool noted = _note != null && Time.realtimeSinceStartupAsDouble < _noteUntil;
+        _status.text = noted ? _note : FamiliarService.LastStatus;
+        _status.color = noted ? Theme.Due : Theme.TextDim;
         _catalogStatus.text = FamiliarCatalog.Status;
         _allTab.Label.text = FamiliarCatalog.Busy ? "Listing..." : "List All";
         if (_confirmDelete != null && Time.realtimeSinceStartupAsDouble >= _confirmUntil) SetConfirmDelete(null);

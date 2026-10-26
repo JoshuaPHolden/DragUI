@@ -31,6 +31,9 @@ internal static class UIManager
     static CharacterPanel _character;
     static CooldownPanel _cooldowns;
     static LoadoutPanel _loadouts;
+    static NoctveilPanel _noctveil;
+    static TeleportPanel _teleports;
+    static TeleportPopout _teleportPopout;
     static readonly List<Window> _windows = new();
     static float _appliedScale;
     static double _inGameSince;
@@ -38,6 +41,7 @@ internal static class UIManager
     static bool _huntsChanged;
     static bool _familiarsChanged;
     static bool _loadoutsChanged;
+    static bool _teleportsChanged;
 
     // Something the player can move: dragged by Handle (except over Exclude), position saved on release.
     sealed class Draggable
@@ -100,9 +104,11 @@ internal static class UIManager
         if (!_root.activeSelf) _root.SetActive(true);
 
         ApplyScale();
-        TypingInUI = IsTypingInOurField() || (_familiars?.Capturing ?? false);
+        TypingInUI = IsTypingInOurField() || (_familiars?.Capturing ?? false) || (_teleports?.Capturing ?? false);
         HandleHotkeys();
         _familiars?.Update();
+        _teleports?.Update();
+        _loadouts?.UpdateProgress(); // per frame so the bar moves smoothly
         HandlePointer();
 
         if (_huntsChanged)
@@ -121,6 +127,12 @@ internal static class UIManager
         {
             _loadoutsChanged = false;
             _loadouts?.Rebuild();
+        }
+        if (_teleportsChanged)
+        {
+            _teleportsChanged = false;
+            _teleports?.RebuildList();
+            _teleportPopout?.Rebuild();
         }
 
         if (now >= _nextRefreshAt)
@@ -186,6 +198,12 @@ internal static class UIManager
             _experience = new ExperiencePanel(_root.transform);
             _windows.Add(_experience);
         }
+        _noctveil = new NoctveilPanel(_root.transform);
+        _windows.Add(_noctveil);
+        _teleportPopout = new TeleportPopout(_root.transform);
+        _teleports = new TeleportPanel(_root.transform, _teleportPopout.Toggle);
+        _windows.Add(_teleports);
+        if (_teleportPopout.Visible) TeleportStore.Refresh(); // its buttons come from the server's list
 
         // One button per feature. Add new features here.
         var entries = new List<ControlBar.Entry>
@@ -222,26 +240,29 @@ internal static class UIManager
             });
         entries.Add(new()
         {
-            Label = "Auto TP", Width = 92f,
-            IsOpen = () => AutoTeleport.Enabled,
-            Toggle = () => AutoTeleport.SetEnabled(!AutoTeleport.Enabled),
-            GetLabel = () => AutoTeleport.Enabled ? "Auto TP on" : "Auto TP off",
+            Label = "Teleport", Width = 100f,
+            IsOpen = () => _teleports.Visible,
+            Toggle = _teleports.Toggle,
+            GetLabel = () => AutoTeleport.PendingCount > 0 ? $"Teleport ({AutoTeleport.PendingCount})" : "Teleport",
         });
+        // Settings for particular servers, one entry per server.
         entries.Add(new()
         {
-            Label = "Alarm", Width = 96f,
-            IsOpen = () => BossAlarm.Enabled,
-            Toggle = () => BossAlarm.SetEnabled(!BossAlarm.Enabled),
-            GetLabel = AlarmLabel,
+            Label = "Server Settings", Width = 128f,
+            Children = new List<ControlBar.Entry>
+            {
+                new() { Label = "Noctveil", IsOpen = () => _noctveil.Visible, Toggle = _noctveil.Toggle },
+            },
         });
+        // Notification slot: shows the newest notice from any feature (e.g. a boss alarm's teleport).
         entries.Add(new()
         {
-            Label = "Teleport", Width = 210f,
-            IsVisible = () => BossAlarm.Active != null,
-            IsFlashing = () => BossAlarm.Flashing,
+            Label = "Notice", Width = 210f,
+            IsVisible = () => Notifications.Current != null,
+            IsFlashing = () => Notifications.Flashing,
             IsOpen = () => true,
-            Toggle = BossAlarm.TeleportToActive,
-            GetLabel = TeleportLabel,
+            Toggle = Notifications.Click,
+            GetLabel = () => Notifications.Text,
         });
         _bar = new ControlBar(_root.transform, entries);
 
@@ -254,6 +275,11 @@ internal static class UIManager
         };
         _draggables.Add(bar);
         _draggables.Add(new Draggable { Root = _hud.Root, Handle = _hud.Header, Save = p => Settings.HudPosition = p });
+        _draggables.Add(new Draggable
+        {
+            Root = _teleportPopout.Root, Handle = _teleportPopout.Header, Exclude = _teleportPopout.CloseButton,
+            Save = p => Settings.TeleportPopoutPosition = p,
+        });
         foreach (var window in _windows)
         {
             var w = window;
@@ -268,28 +294,9 @@ internal static class UIManager
         FamiliarStore.Changed += OnFamiliarsChanged;
         FamiliarCatalog.Changed += OnFamiliarsChanged;
         LoadoutStore.Changed += OnLoadoutsChanged;
+        TeleportStore.Changed += OnTeleportsChanged;
         Core.Log.LogInfo("UI built.");
     }
-
-    static string AlarmLabel()
-    {
-        if (!BossAlarm.Enabled) return "Alarm off";
-        if (BossAlarm.Next is not { } next) return "Alarm on";
-        return $"Alarm {FormatWait(BossAlarm.Until(next))}";
-    }
-
-    // Counts down to the spawn while the alarm's lead time runs.
-    static string TeleportLabel()
-    {
-        if (BossAlarm.Active is not { } active) return "Teleport";
-        var wait = BossAlarm.Until(active);
-        return wait > TimeSpan.Zero
-            ? $"TP {active.Event.Label} {(int)wait.TotalMinutes}:{wait.Seconds:00}"
-            : $"TP {active.Event.Label}";
-    }
-
-    static string FormatWait(TimeSpan wait) =>
-        wait.TotalMinutes < 1 ? "<1m" : wait.TotalHours >= 1 ? $"{(int)wait.TotalHours}h{wait.Minutes:00}" : $"{(int)wait.TotalMinutes}m";
 
     public static void Destroy()
     {
@@ -297,6 +304,7 @@ internal static class UIManager
         FamiliarStore.Changed -= OnFamiliarsChanged;
         FamiliarCatalog.Changed -= OnFamiliarsChanged;
         LoadoutStore.Changed -= OnLoadoutsChanged;
+        TeleportStore.Changed -= OnTeleportsChanged;
         if (_root != null) Object.Destroy(_root);
         _root = null;
         _bar = null;
@@ -308,6 +316,9 @@ internal static class UIManager
         _character = null;
         _cooldowns = null;
         _loadouts = null;
+        _noctveil = null;
+        _teleports = null;
+        _teleportPopout = null;
         _windows.Clear();
         _draggables.Clear();
         _drag = null;
@@ -320,6 +331,7 @@ internal static class UIManager
     static void OnHuntsChanged() => _huntsChanged = true;
     static void OnFamiliarsChanged() => _familiarsChanged = true;
     static void OnLoadoutsChanged() => _loadoutsChanged = true;
+    static void OnTeleportsChanged() => _teleportsChanged = true;
 
     static void ApplyScale()
     {
@@ -331,10 +343,12 @@ internal static class UIManager
 
     static void HandleHotkeys()
     {
-        if (IsTypingInGameField() || (_familiars?.Capturing ?? false)) return;
+        if (IsTypingInGameField() || (_familiars?.Capturing ?? false) || (_teleports?.Capturing ?? false)) return;
 
         var key = Settings.ToggleKey;
         if (key != KeyCode.None && Input.GetKeyDown(key)) ToggleList();
+
+        if (TeleportStore.TryGetPressed(out string teleport)) TeleportStore.Teleport(teleport);
 
         if (_familiars != null && FamiliarStore.TryGetPressed(out string familiar))
             FamiliarService.Summon(familiar, remember: false);

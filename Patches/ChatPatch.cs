@@ -17,7 +17,7 @@ internal static class ChatPatch
     [HarmonyPriority(Priority.First)]
     static void Prefix(ClientChatSystem __instance)
     {
-        if (!(Settings.ReadChatKills || Settings.FamiliarsEnabled || Settings.XpEnabled || Settings.SheetEnabled || Settings.AutoTeleportEnabled) || !Core.InGame) return;
+        if (!Core.InGame) return; // teleport requests and .stp replies are always read now
         try
         {
             var entities = __instance._ReceiveChatMessagesQuery.ToEntityArray(Allocator.Temp);
@@ -28,6 +28,11 @@ internal static class ChatPatch
                     if (!entity.Has<ChatMessageServerEvent>()) continue;
                     var chat = entity.Read<ChatMessageServerEvent>();
                     string text = chat.MessageText.Value;
+                    if (TeleportStore.OnServerMessage(chat.MessageType, text))
+                    {
+                        Core.EntityManager.DestroyEntity(entity); // .stp ltp listing the Teleport window asked for
+                        continue;
+                    }
                     if (Settings.FamiliarsEnabled && FamiliarCatalog.OnServerMessage(chat.MessageType, text))
                     {
                         Core.EntityManager.DestroyEntity(entity); // List All's own command replies
