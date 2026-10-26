@@ -8,7 +8,7 @@
     <LangVersion>latest</LangVersion>
     <AssemblyName>DragUI</AssemblyName>
     <RootNamespace>DragUI</RootNamespace>
-    <Version>1.1.0</Version>
+    <Version>1.1.1</Version>
     <Description>Client-side utility UI for V Rising: V Blood hunt tracker, familiar quick-summon, one-click loadouts, DPS meter, XP/hour, full character sheet, teleport tools and boss alarms.</Description>
     <BepInExPluginGuid>nezoic.DragUI</BepInExPluginGuid>
     <CheckEolTargetFramework>false</CheckEolTargetFramework>

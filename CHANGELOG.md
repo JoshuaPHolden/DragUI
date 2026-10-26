@@ -1,3 +1,6 @@
+## 1.1.1
+- Changed: the mod page now describes every tool up front, and lists which ones need server mods (Bloodcraft, Eclipse, ScarletTeleports, PerkShop). No changes to the mod itself.
+
 ## 1.1.0
 First Thunderstore release. A client-side utility UI, installed on your PC (nothing needed on the server).
 

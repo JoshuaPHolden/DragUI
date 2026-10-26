@@ -1,8 +1,27 @@
 # DragUI
 
-A client-side V Rising mod for hunting V Bloods. You pick the bosses you want, and an on-screen tracker shows whether each one is up, how far away it is, and when it respawns. One click switches which V Blood is tracked.
+An all-in-one utility UI for V Rising. One small control bar, which you can drag anywhere on screen, opens every tool:
 
-Client only: nothing is needed on the server. It works on any server, vanilla or modded. The optional **Familiars** window is the one exception: it needs a server running [Bloodcraft](https://thunderstore.io/c/v-rising/p/zfolmt/Bloodcraft/) with familiars enabled.
+- **V Blood hunt tracker:** whether each boss you're hunting is up, how far away and in which direction, and an exact or estimated respawn countdown. One click switches the game's tracking trail.
+- **Loadouts:** save your gear, spells, spell school passives and Bloodcraft class, and swap the whole build back on with one click.
+- **DPS meter:** real damage after every modifier, per ability, with your recent fights to compare builds.
+- **Character sheet:** every combat stat and exactly where it comes from, including the Bloodcraft and PerkShop bonuses the game's own sheet can't see.
+- **Cooldown tester:** measures your real cooldowns and shows how your cooldown stat actually applies.
+- **Familiars:** summon by name or hotkey, call/dismiss, and see every familiar from every box in one list.
+- **Experience per hour:** XP/hour on the bar, split into quests, mobs and V Bloods per prestige level.
+- **Teleports:** auto-accept or accept/deny teleport requests, one-click and hotkey teleports, and a pop-out teleport window to keep on screen.
+- **Boss alarm:** a chime and a one-click teleport notice two minutes before each scheduled world boss spawns.
+
+It's a **client** mod: install it on your PC, nothing goes on the server. The core tools work on any server, vanilla or modded. Some tools drive server mods through their chat commands, so they only work where the server runs those mods:
+
+| Tool | Works on | Needs on the server |
+|---|---|---|
+| Hunt tracker, DPS meter, cooldown tester | any server | nothing |
+| Character sheet | any server | Bloodcraft (+ Eclipse on your client) for the Bloodcraft bonuses; PerkShop for perk stats |
+| Loadouts | any server | Bloodcraft (+ Eclipse on your client) for the class part only |
+| Familiars, Experience per hour | Bloodcraft servers | [Bloodcraft](https://thunderstore.io/c/v-rising/p/zfolmt/Bloodcraft/) (familiars enabled for Familiars) |
+| Teleports | ScarletTeleports servers | ScarletTeleports |
+| Boss alarm | any server with a boss schedule | ships with Noctveil's schedule (editable); its teleport button uses ScarletTeleports |
 
 ## Features
 

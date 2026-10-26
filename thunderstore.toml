@@ -6,7 +6,7 @@ schemaVersion = "0.0.1"
 [package]
 namespace = "Dragula"
 name = "DragUI"
-versionNumber = "1.1.0"
+versionNumber = "1.1.1"
 description = "Client-side utility UI for V Rising: V Blood hunt tracker, familiar quick-summon, one-click loadouts, DPS meter, XP/hour, full character sheet, teleport tools and boss alarms."
 websiteUrl = "https://github.com/JoshuaPHolden/DragUI"
 containsNsfwContent = false
