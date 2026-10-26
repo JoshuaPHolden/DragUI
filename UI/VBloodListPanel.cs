@@ -1,9 +1,9 @@
 using TMPro;
 using UnityEngine;
-using VBloodHunter.Data;
-using VBloodHunter.Services;
+using DragUI.Data;
+using DragUI.Services;
 
-namespace VBloodHunter.UI;
+namespace DragUI.UI;
 
 // The full list: every V Blood with a hunt checkbox, where it lives, its live status and a Track button.
 internal sealed class VBloodListPanel : Window

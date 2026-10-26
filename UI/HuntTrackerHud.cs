@@ -1,13 +1,13 @@
 using TMPro;
 using UnityEngine;
 using Object = UnityEngine.Object;
-using VBloodHunter.Data;
-using VBloodHunter.Services;
+using DragUI.Data;
+using DragUI.Services;
 
-namespace VBloodHunter.UI;
+namespace DragUI.UI;
 
-// Always-on widget: a header button that opens the V Blood list, and one row per hunted V Blood with
-// its live status and a Track button.
+// Always-on widget: a header that collapses/expands it, a gear that opens the V Blood list (to pick the
+// hunt), and one row per hunted V Blood with its live status and a Track button.
 internal sealed class HuntTrackerHud
 {
     const float Width = 400f;
@@ -43,21 +43,22 @@ internal sealed class HuntTrackerHud
         Root = UIFactory.CreateCard("HuntTracker", parent, Theme.HudBg, Radius).Root;
 
         _headerButton = UIFactory.CreateButton("ListButton", Root, "V Blood Hunt", 15, OnHeaderClicked, radius: 7f);
-        _headerButton.Rect.Place(Pad, Pad, Width - Pad * 3 - HeaderHeight, HeaderHeight);
+        _headerButton.Rect.Place(Pad, Pad, Width - Pad * 4 - HeaderHeight * 2, HeaderHeight);
         _headerButton.SetColors(Theme.Accent, Theme.AccentHover);
         _headerButton.Label.fontStyle = FontStyles.Bold;
         _headerButton.Label.characterSpacing = 1.5f;
 
-        _collapseButton = UIFactory.CreateButton("Collapse", Root, "-", 16, () =>
-        {
-            Settings.HudCollapsed = !Settings.HudCollapsed;
-            Layout();
-        }, radius: 7f);
+        var gear = UIFactory.CreateButton("Choose", Root, string.Empty, 16, UIManager.ToggleList, radius: 7f);
+        gear.Rect.Place(Width - Pad * 2 - HeaderHeight * 2, Pad, HeaderHeight, HeaderHeight);
+        gear.SetColors(Theme.TitleBg, Theme.AccentHover);
+        DrawGear(gear.Rect, HeaderHeight / 2f);
+
+        _collapseButton = UIFactory.CreateButton("Collapse", Root, "-", 16, ToggleCollapsed, radius: 7f);
         _collapseButton.Rect.Place(Width - Pad - HeaderHeight, Pad, HeaderHeight, HeaderHeight);
         _collapseButton.SetColors(Theme.TitleBg, Theme.AccentHover);
 
         _body = UIFactory.CreateRect("Rows", Root);
-        _emptyText = UIFactory.CreateText("Empty", _body, "No V Bloods selected. Click the header to pick some.",
+        _emptyText = UIFactory.CreateText("Empty", _body, "No V Bloods selected. Click the gear to pick some.",
             12, Theme.TextDim);
         _emptyText.rectTransform.Place(12, 0, Width - 24, RowHeight);
 
@@ -73,10 +74,29 @@ internal sealed class HuntTrackerHud
         if (visible) Refresh();
     }
 
+    // No gear glyph in the game's font, so: a ring of teeth around a hub with a hole.
+    static void DrawGear(Transform parent, float centre)
+    {
+        for (int i = 0; i < 8; i++)
+        {
+            float angle = i * Mathf.PI / 4f;
+            UIFactory.CreateDot(parent, centre + Mathf.Cos(angle) * 6f - 2f, centre + Mathf.Sin(angle) * 6f - 2f, 4f, Theme.Text);
+        }
+        UIFactory.CreateDot(parent, centre - 5.5f, centre - 5.5f, 11f, Theme.Text);
+        UIFactory.CreateDot(parent, centre - 2f, centre - 2f, 4f, Theme.TitleBg);
+    }
+
     void OnHeaderClicked()
     {
         if (UIManager.ConsumeDragClick()) return;
-        UIManager.ToggleList();
+        ToggleCollapsed();
+    }
+
+    void ToggleCollapsed()
+    {
+        Settings.HudCollapsed = !Settings.HudCollapsed;
+        Layout();
+        Refresh();
     }
 
     public void Rebuild()

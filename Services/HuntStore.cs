@@ -1,13 +1,13 @@
 using BepInEx;
-using VBloodHunter.Data;
+using DragUI.Data;
 
-namespace VBloodHunter.Services;
+namespace DragUI.Services;
 
 // The V Bloods the player chose to hunt. Saved as one PrefabGUID per line in
-// BepInEx/config/VBloodHunter/hunts.txt so it survives restarts and server switches.
+// BepInEx/config/DragUI/hunts.txt so it survives restarts and server switches.
 internal static class HuntStore
 {
-    static readonly string _directory = Path.Combine(Paths.ConfigPath, "VBloodHunter");
+    static readonly string _directory = Plugin.DataDirectory;
     static readonly string _path = Path.Combine(_directory, "hunts.txt");
     static readonly HashSet<int> _selected = new();
 

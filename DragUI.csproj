@@ -6,11 +6,11 @@
     <Nullable>disable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <LangVersion>latest</LangVersion>
-    <AssemblyName>VBloodHunter</AssemblyName>
-    <RootNamespace>VBloodHunter</RootNamespace>
-    <Version>0.5.0</Version>
-    <Description>Client-side V Blood hunt list: pick the V Bloods you want to hunt, see their alive/respawn status on screen, and switch the tracked V Blood with one click.</Description>
-    <BepInExPluginGuid>nezoic.VBloodHunter</BepInExPluginGuid>
+    <AssemblyName>DragUI</AssemblyName>
+    <RootNamespace>DragUI</RootNamespace>
+    <Version>0.12.0</Version>
+    <Description>Client-side utility UI for V Rising: V Blood hunt tracker, familiar quick-summon, boss alarms, auto teleport accept, XP/hour, DPS meter and a full character sheet.</Description>
+    <BepInExPluginGuid>nezoic.DragUI</BepInExPluginGuid>
     <CheckEolTargetFramework>false</CheckEolTargetFramework>
     <RestoreSources>
       https://api.nuget.org/v3/index.json;
@@ -20,11 +20,15 @@
     <!-- Copy the built DLL into the r2modman profile the game is launched from:
            dotnet build -p:DeployToClient=true
          Other profile: -p:R2ModmanProfile=Name
-         Any other BepInEx install: -p:ClientPluginDirectory="...\BepInEx\plugins\VBloodHunter" -->
+         Any other BepInEx install: -p:ClientPluginDirectory="...\BepInEx\plugins\DragUI" -->
     <DeployToClient>false</DeployToClient>
     <R2ModmanProfile Condition="'$(R2ModmanProfile)' == ''">Default</R2ModmanProfile>
-    <ClientPluginDirectory Condition="'$(ClientPluginDirectory)' == ''">$(APPDATA)\r2modmanPlus-local\VRising\profiles\$(R2ModmanProfile)\BepInEx\plugins\VBloodHunter</ClientPluginDirectory>
+    <ClientPluginDirectory Condition="'$(ClientPluginDirectory)' == ''">$(APPDATA)\r2modmanPlus-local\VRising\profiles\$(R2ModmanProfile)\BepInEx\plugins\DragUI</ClientPluginDirectory>
   </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Data\prefab-names.tsv.gz" LogicalName="DragUI.prefab-names.tsv.gz" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="BepInEx.PluginInfoProps" Version="2.1.0" />
@@ -34,7 +38,7 @@
 
   <Target Name="DeployToClientDir" AfterTargets="Build" Condition="'$(DeployToClient)' == 'true'">
     <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(ClientPluginDirectory)" SkipUnchangedFiles="true" />
-    <Message Importance="high" Text="VBloodHunter -> $(ClientPluginDirectory)" />
+    <Message Importance="high" Text="DragUI -> $(ClientPluginDirectory)" />
   </Target>
 
 </Project>

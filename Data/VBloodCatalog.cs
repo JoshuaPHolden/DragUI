@@ -1,6 +1,6 @@
 using Stunlock.Core;
 
-namespace VBloodHunter.Data;
+namespace DragUI.Data;
 
 // V Blood bosses the hunt list offers. GUIDs come from the decaprime/vrising-modding prefab dump
 // (game 1.1). DefaultRespawnSeconds is the community-dataset value for each boss and is only a

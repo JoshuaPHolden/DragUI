@@ -1,9 +1,9 @@
 using HarmonyLib;
 using ProjectM;
 using UnityEngine;
-using VBloodHunter.UI;
+using DragUI.UI;
 
-namespace VBloodHunter.Patches;
+namespace DragUI.Patches;
 
 // Stops clicks on our buttons from also firing an attack in the world. Approach adapted from
 // Raphael (MIT, KDavidP1987), which found in testing that:

@@ -3,7 +3,7 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
-namespace VBloodHunter.UI;
+namespace DragUI.UI;
 
 internal static class Theme
 {

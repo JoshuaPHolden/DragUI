@@ -3,9 +3,9 @@ using ProjectM;
 using ProjectM.UI;
 using Unity.Entities;
 using UnityEngine;
-using VBloodHunter.UI;
+using DragUI.UI;
 
-namespace VBloodHunter.Patches;
+namespace DragUI.Patches;
 
 // Keeps keystrokes typed into our text boxes from also moving the character, casting or opening
 // menus. Approach adapted from Raphael (MIT, KDavidP1987), which found that:

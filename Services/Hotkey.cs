@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace VBloodHunter.Services;
+namespace DragUI.Services;
 
 // A key plus Ctrl/Alt/Shift. Modifiers must match exactly, so "Ctrl+1" and "1" are different binds.
 // Saved as text like "Ctrl+Alt+F5".

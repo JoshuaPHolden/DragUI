@@ -5,7 +5,7 @@ using Unity.Entities;
 using Unity.Mathematics;
 using Unity.Transforms;
 
-namespace VBloodHunter;
+namespace DragUI;
 
 // Client-world locator. Everything here is bound to ONE client World: leaving a game or switching
 // servers disposes that World, so Reset() (called from ClientBootstrapSystem.OnDestroy) drops every
@@ -101,6 +101,17 @@ internal static class Core
         var p = character.Read<LocalToWorld>().Position;
         position = new float2(p.x, p.z);
         return true;
+    }
+
+    /// <summary>A query on the client world for entities with all of <paramref name="all"/>. Create once per
+    /// world and cache it (never per frame).</summary>
+    public static EntityQuery BuildQuery(params Il2CppSystem.Type[] all)
+    {
+        var builder = new EntityQueryBuilder(Unity.Collections.Allocator.Temp);
+        foreach (var type in all) builder.AddAll(ComponentType.ReadOnly(type));
+        var query = EntityManager.CreateEntityQuery(ref builder);
+        builder.Dispose();
+        return query;
     }
 
     public static void Diag(string message)

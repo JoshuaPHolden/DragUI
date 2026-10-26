@@ -1,9 +1,9 @@
 using HarmonyLib;
 using ProjectM;
-using VBloodHunter.Services;
-using VBloodHunter.UI;
+using DragUI.Services;
+using DragUI.UI;
 
-namespace VBloodHunter.Patches;
+namespace DragUI.Patches;
 
 [HarmonyPatch]
 internal static class LifecyclePatches
@@ -43,6 +43,16 @@ internal static class LifecyclePatches
             ClickGuard.OnWorldTeardown();
             TypingLock.OnWorldTeardown();
             FamiliarService.OnWorldTeardown();
+            FamiliarCatalog.OnWorldTeardown();
+            BossAlarm.OnWorldTeardown();
+            AutoTeleport.OnWorldTeardown();
+            ExperienceTracker.OnWorldTeardown();
+            DamageMeter.OnWorldTeardown();
+            BloodcraftStats.OnWorldTeardown();
+            PerkshopStats.OnWorldTeardown();
+            CooldownTester.OnWorldTeardown();
+            LoadoutService.OnWorldTeardown();
+            LoadoutStore.OnWorldTeardown();
             Core.Reset();
         }
         catch (Exception ex)

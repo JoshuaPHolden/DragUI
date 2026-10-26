@@ -2,7 +2,7 @@ using System.Text.RegularExpressions;
 using ProjectM.Network;
 using UnityEngine;
 
-namespace VBloodHunter.Services;
+namespace DragUI.Services;
 
 // Quick summon for Bloodcraft familiars, by sending its chat commands for the player:
 //   .fam sb "<name>"  smartbind: finds the name (case-insensitive, partial names work) in every box,

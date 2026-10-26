@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace VBloodHunter.UI;
+namespace DragUI.UI;
 
 // Procedurally drawn, 9-sliced sprites for rounded corners, outlines and soft shadows (uGUI has no
 // rounded rectangles built in). Each is an anti-aliased signed-distance rounded box drawn once into a

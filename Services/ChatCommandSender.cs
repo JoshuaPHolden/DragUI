@@ -3,7 +3,7 @@ using ProjectM.Network;
 using Unity.Collections;
 using Unity.Entities;
 
-namespace VBloodHunter.Services;
+namespace DragUI.Services;
 
 // Sends a chat command to the server as if the player had typed it (e.g. ".fam sb Alpha"), so a
 // button can run a server mod's command. Same network-event injection Eclipse and Raphael use: one

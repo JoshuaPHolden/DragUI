@@ -3,9 +3,9 @@ using BepInEx.Unity.IL2CPP.Utils.Collections;
 using ProjectM.Physics;
 using UnityEngine;
 using Object = UnityEngine.Object;
-using VBloodHunter.UI;
+using DragUI.UI;
 
-namespace VBloodHunter.Services;
+namespace DragUI.Services;
 
 // Per-frame driver. Hosts a coroutine on a DontDestroyOnLoad GameObject (an existing game
 // MonoBehaviour, so no IL2CPP type injection is needed). It keeps running in the main menu,
@@ -18,7 +18,7 @@ internal static class Ticker
     public static void Start()
     {
         if (_host != null) return;
-        _host = new GameObject("VBloodHunter.Ticker");
+        _host = new GameObject("DragUI.Ticker");
         Object.DontDestroyOnLoad(_host);
         _host.hideFlags = HideFlags.HideAndDontSave;
         _behaviour = _host.AddComponent<IgnorePhysicsDebugSystem>();
@@ -48,6 +48,13 @@ internal static class Ticker
             if (Core.InGame)
             {
                 VBloodTracker.Tick();
+                BossAlarm.Tick();
+                AutoTeleport.Tick();
+                if (Settings.XpEnabled) ExperienceTracker.Tick();
+                if (Settings.DpsEnabled) DamageMeter.Tick();
+                if (Settings.SheetEnabled) PerkshopStats.Tick();
+                if (Settings.LoadoutsEnabled) LoadoutService.Tick();
+                if (Settings.FamiliarsEnabled) FamiliarCatalog.Tick();
             }
         }
         catch (Exception ex)

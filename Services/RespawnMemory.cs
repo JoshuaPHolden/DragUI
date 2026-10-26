@@ -1,19 +1,20 @@
 using System.Globalization;
 using BepInEx;
-using VBloodHunter.Data;
+using DragUI.Data;
 
-namespace VBloodHunter.Services;
+namespace DragUI.Services;
 
 // Respawn durations measured exactly in-game (ghost respawn time minus the game's own time of death),
-// used ahead of the catalog defaults. Each line in BepInEx/config/VBloodHunter/respawn-times.txt is
+// used ahead of the catalog defaults. Each line in BepInEx/config/DragUI/respawn-times.txt is
 // "<PrefabGUID>=<seconds>" after a version header.
 //
 // Only exact measurements are stored. Earlier versions also learned from poll observations, which drifted
 // badly on servers that keep dead V Bloods on their position list; files without the header are discarded.
 internal static class RespawnMemory
 {
-    const string Header = "# VBloodHunter respawn times v2 (exact measurements only)";
-    static readonly string _path = Path.Combine(Paths.ConfigPath, "VBloodHunter", "respawn-times.txt");
+    const string Header = "# DragUI respawn times v2 (exact measurements only)";
+    const string LegacyHeader = "# VBloodHunter respawn times v2 (exact measurements only)"; // same format, before the rename
+    static readonly string _path = Path.Combine(Plugin.DataDirectory, "respawn-times.txt");
     static readonly Dictionary<int, double> _learned = new();
 
     public enum Source { Learned, Default, Fallback }
@@ -57,7 +58,7 @@ internal static class RespawnMemory
         {
             if (!File.Exists(_path)) return;
             var lines = File.ReadAllLines(_path);
-            if (lines.Length == 0 || lines[0] != Header)
+            if (lines.Length == 0 || (lines[0] != Header && lines[0] != LegacyHeader))
             {
                 File.Delete(_path);
                 Core.Log.LogInfo("Discarded respawn times learned by an older version (they could drift); using the built-in times.");

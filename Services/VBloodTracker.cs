@@ -7,9 +7,9 @@ using Unity.Entities;
 using Unity.Mathematics;
 using Unity.Transforms;
 using UnityEngine;
-using VBloodHunter.Data;
+using DragUI.Data;
 
-namespace VBloodHunter.Services;
+namespace DragUI.Services;
 
 internal enum HuntState
 {
@@ -298,6 +298,7 @@ internal static class VBloodTracker
                     // A corpse from a death we already have a newer record of isn't news.
                     if (status.IsDead && status.DiedAt >= diedAt - 5) continue;
                     MarkDead(status, diedAt, exact, "seen dying nearby");
+                    if (now - diedAt < 10) ExperienceTracker.OnVBloodKilledNearby();
                     StartCalibration(status, now);
                     continue;
                 }
@@ -544,14 +545,7 @@ internal static class VBloodTracker
         _queryWorld = Core.Client;
     }
 
-    static EntityQuery BuildQuery(EntityManager em, params Il2CppSystem.Type[] all)
-    {
-        var builder = new EntityQueryBuilder(Allocator.Temp);
-        foreach (var type in all) builder.AddAll(ComponentType.ReadOnly(type));
-        var query = em.CreateEntityQuery(ref builder);
-        builder.Dispose();
-        return query;
-    }
+    static EntityQuery BuildQuery(EntityManager em, params Il2CppSystem.Type[] all) => Core.BuildQuery(all);
 
     /// <summary>World is being torn down (logout / server switch). Plain field resets only.</summary>
     public static void OnWorldTeardown()

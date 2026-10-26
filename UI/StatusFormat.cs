@@ -1,8 +1,8 @@
 using Unity.Mathematics;
 using UnityEngine;
-using VBloodHunter.Services;
+using DragUI.Services;
 
-namespace VBloodHunter.UI;
+namespace DragUI.UI;
 
 internal static class StatusFormat
 {

@@ -1,0 +1,31 @@
+# Written by the vrising-thunderstore skill (scripts/package.ps1) on every package run: change the
+# csproj (<AssemblyName>, <Version>, <Description>) instead of editing this file.
+[config]
+schemaVersion = "0.0.1"
+
+[package]
+namespace = "nezoic"
+name = "DragUI"
+versionNumber = "0.12.0"
+description = "Client-side utility UI for V Rising: V Blood hunt tracker, familiar quick-summon, boss alarms, auto teleport accept, XP/hour, DPS meter and a full character sheet."
+websiteUrl = "https://github.com/JoshuaPHolden/DragUI"
+containsNsfwContent = false
+
+[package.dependencies]
+BepInEx-BepInExPack_V_Rising = "1.733.2"
+
+[build]
+icon = "./icon.png"
+readme = "./README.md"
+outdir = "./build"
+
+[[build.copy]]
+source = "./bin/Release/net6.0/DragUI.dll"
+target = "DragUI.dll"
+
+[publish]
+repository = "https://thunderstore.io"
+communities = ["v-rising"]
+
+[publish.categories]
+v-rising = ["oakveil-update", "mods", "client"]

@@ -1,8 +1,8 @@
 using HarmonyLib;
 using ProjectM.UI;
-using VBloodHunter.Services;
+using DragUI.Services;
 
-namespace VBloodHunter.Patches;
+namespace DragUI.Patches;
 
 // The game's GetVBloodsPositionResponseSystem turns the server's GetVBloodPositionsResponseEvent
 // into its public Positions list. We hand that list to the tracker on frames where a response was

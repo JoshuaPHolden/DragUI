@@ -1,8 +1,8 @@
 using System.Text.RegularExpressions;
 using ProjectM.Network;
-using VBloodHunter.Data;
+using DragUI.Data;
 
-namespace VBloodHunter.Services;
+namespace DragUI.Services;
 
 // Starts a respawn countdown when a server chat message announces a V Blood kill (kill-feed /
 // announcement mods, e.g. "Player has slain Alpha the White Wolf!"). Formats differ between mods, so

@@ -1,10 +1,10 @@
 using BepInEx;
 
-namespace VBloodHunter.Services;
+namespace DragUI.Services;
 
 // The familiar names the player has summoned by name, newest first, so they become one-click buttons,
 // each with an optional hotkey. Saved one per line ("name" or "name<TAB>hotkey") in
-// BepInEx/config/VBloodHunter/familiars.txt.
+// BepInEx/config/DragUI/familiars.txt.
 internal static class FamiliarStore
 {
     const int MaxSaved = 40;
@@ -15,7 +15,7 @@ internal static class FamiliarStore
         public Hotkey Hotkey;
     }
 
-    static readonly string _directory = Path.Combine(Paths.ConfigPath, "VBloodHunter");
+    static readonly string _directory = Plugin.DataDirectory;
     static readonly string _path = Path.Combine(_directory, "familiars.txt");
     static readonly List<Entry> _entries = new();
 

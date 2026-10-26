@@ -1,7 +1,7 @@
 using TMPro;
 using UnityEngine;
 
-namespace VBloodHunter.UI;
+namespace DragUI.UI;
 
 // A feature window: rounded card centred on screen, with a title bar (drag handle) and a close
 // button. Hidden until opened from the control bar. UIManager drags it and saves where it's put.
